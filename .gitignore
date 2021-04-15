@@ -1,3 +1,11 @@
+# Custom for Eclipse 
+.dep
+.settings
+Build
+*.cproject
+*.project
+*.launch
+
 # Prerequisites
 *.d
 
