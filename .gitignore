@@ -2,6 +2,7 @@
 .dep
 .settings
 Build
+build
 *.cproject
 *.project
 *.launch
