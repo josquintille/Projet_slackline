@@ -1,7 +1,6 @@
 # Custom for Eclipse 
 .dep
 .settings
-Build
 build
 *.cproject
 *.project
