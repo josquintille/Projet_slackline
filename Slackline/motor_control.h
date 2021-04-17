@@ -8,6 +8,6 @@
 #ifndef MOTOR_CONTROL_H_
 #define MOTOR_CONTROL_H_
 
-void motor_control_start();
+void motor_control_start(void);
 
 #endif /* MOTOR_CONTROL_H_ */
