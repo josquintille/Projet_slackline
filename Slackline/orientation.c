@@ -7,19 +7,17 @@
  *  Created on: 17 avr. 2021
  *      Author: tille
  */
-
-
-#include <sensors/imu.h>
-#include <msgbus/messagebus.h>
-
 #define DEBUGING
-
 #ifdef DEBUGING
 
 	#include <ch.h>
 	#include <chprintf.h>
 
 #endif
+
+#include <msgbus/messagebus.h>
+#include <sensors/imu.h>
+
 
 // Bus to communicate with the IMU
 messagebus_t bus;
@@ -32,7 +30,6 @@ static THD_FUNCTION(orientation_thd, arg) {
      (void) arg;
      chRegSetThreadName(__FUNCTION__);
 
-     messagebus_init(&bus, &bus_lock, &bus_condvar);
      messagebus_topic_t *imu_topic = messagebus_find_topic_blocking(&bus, "/imu");
      imu_msg_t imu_values;
      while(1)
@@ -63,7 +60,8 @@ void orientation_start(void)
 {
 	// setup IMU
 	imu_start();
-	//calibrate_acc();
+	messagebus_init(&bus, &bus_lock, &bus_condvar);
+	calibrate_acc();
 	//calibrate_gyro();
 
 	// launch the thread
