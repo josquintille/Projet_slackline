@@ -6,6 +6,7 @@
 #include "ch.h"
 #include "hal.h"
 #include "memory_protection.h"
+#include "sensors/VL53L0X/VL53L0X.h"
 #include <usbcfg.h>
 #include <main.h>
 #include <motors.h>
@@ -43,12 +44,14 @@ int main(void)
     //starts the serial communication
     serial_start();
     //start the USB communication
-    usb_start();
+    //usb_start();
     //starts the camera
     dcmi_start();
 	po8030_start();
 	//inits the motors
 	motors_init();
+	//start the TOF sensor
+	VL53L0X_start();
 
 	//stars the threads for the pi regulator and the processing of the image
 	motor_control_start();
@@ -56,6 +59,10 @@ int main(void)
 
     /* Infinite loop. */
     while (1) {
+    	//read distance sensor and send via USB (serial by wire)
+    	chprintf((BaseSequentialStream *)&SD3, "DISTANCE SENSOR (TOF):\t");
+    	chprintf((BaseSequentialStream *)&SD3, "%d\n", VL53L0X_get_dist_mm());
+
     	//waits 1 second
         chThdSleepMilliseconds(1000);
     }
