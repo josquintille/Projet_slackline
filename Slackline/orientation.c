@@ -16,14 +16,28 @@
 #endif
 
 #include <msgbus/messagebus.h>
+#include <hal.h>
+#include "msgbus/messagebus.h"
+#include "i2c_bus.h"
+#include "sensors/mpu9250.h"
+#include "sensors/mpu9250_registers.h"
 #include <sensors/imu.h>
 
+#include <math.h>
+
+
+#define AXIS_OF_ANGLE 	X_AXIS
+#define TIM2SEC(tim) 	tim/1000
 
 // Bus to communicate with the IMU
 messagebus_t bus;
 MUTEX_DECL(bus_lock);
 CONDVAR_DECL(bus_condvar);
 
+static float angle = 0;
+
+static void timer11_start(void);
+static void update_angle(float current_speed);
 
 static THD_WORKING_AREA(orientation_thd_wa, 512);
 static THD_FUNCTION(orientation_thd, arg) {
@@ -58,6 +72,8 @@ static THD_FUNCTION(orientation_thd, arg) {
 }
 void orientation_start(void)
 {
+	// timer
+	timer11_start();
 	// setup IMU
 	imu_start();
 	messagebus_init(&bus, &bus_lock, &bus_condvar);
@@ -67,3 +83,50 @@ void orientation_start(void)
 	// launch the thread
 	chThdCreateStatic(orientation_thd_wa, sizeof(orientation_thd_wa), NORMALPRIO, orientation_thd, NULL);
 }
+
+
+
+// integrate the angular speed to get the angle
+
+/*
+ * will update the static variable "angle" based on the time integrale of
+ * the angular velocity
+ * 	input : angular_speed in the wanted direction
+ */
+static void update_angle(float current_speed)
+{
+	static float previous_speed = 0;
+
+	// calculate dt
+	chSysLock();
+	uint16_t time = GPTD11.tim->CNT;
+	// integrate with triangle methode
+	angle += 0.5*(previous_speed+current_speed)*TIM2SEC(time);
+	GPTD11.tim->CNT = 0;
+// modifeir : utiliser sleepUntilwindowd !!!
+	chSysUnlock();
+
+	previous_speed = current_speed;
+}
+static void timer11_start(void)
+{
+    //General Purpose Timer configuration
+    //timer 11 is a 16 bit timer so we can measure time
+    //to about 65ms with a 1Mhz counter
+    static const GPTConfig gpt11cfg = {
+        1000000,        /* 1MHz timer clock in order to measure uS.*/
+        NULL,           /* Timer callback.*/
+        0,
+        0
+    };
+
+    gptStart(&GPTD11, &gpt11cfg);
+    //let the timer count to max value
+    gptStartContinuous(&GPTD11, 0xFFFF);
+}
+
+float get_angle()
+{
+	return angle;
+}
+
