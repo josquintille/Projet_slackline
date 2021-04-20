@@ -9,6 +9,7 @@
 #define ORIENTATION_H_
 
 void orientation_start(void);
+
 float get_angle(void);
 
 #endif /* ORIENTATION_H_ */

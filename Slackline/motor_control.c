@@ -5,8 +5,8 @@
  *      Author: tille
  */
 
-#include <motor_control.h>
-#include <orientation.h>
+#include "motor_control.h"
+#include "orientation.h"
 #include <motors.h>
 
 // regulator variable

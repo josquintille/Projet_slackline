@@ -40,7 +40,8 @@ static void timer11_start(void);
 static void update_angle(float current_speed);
 
 static THD_WORKING_AREA(orientation_thd_wa, 512);
-static THD_FUNCTION(orientation_thd, arg) {
+static THD_FUNCTION(orientation_thd, arg)
+{
      (void) arg;
      chRegSetThreadName(__FUNCTION__);
 
@@ -78,7 +79,7 @@ void orientation_start(void)
 	imu_start();
 	messagebus_init(&bus, &bus_lock, &bus_condvar);
 	calibrate_acc();
-	//calibrate_gyro();
+	calibrate_gyro();
 
 	// launch the thread
 	chThdCreateStatic(orientation_thd_wa, sizeof(orientation_thd_wa), NORMALPRIO, orientation_thd, NULL);
