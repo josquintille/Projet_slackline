@@ -22,7 +22,7 @@
 
 
 #define AXIS_OF_ANGLE 	X_AXIS
-#define TIM2SEC(tim) 	tim/1000
+#define TIM2SEC(tim) 	tim/1e6
 
 // Bus to communicate with the IMU
 messagebus_t bus;
@@ -45,13 +45,15 @@ static THD_FUNCTION(orientation_thd, arg)
      while(1)
      {
     	 messagebus_topic_wait(imu_topic, &imu_values, sizeof(imu_values));
+    	 update_angle(imu_values.gyro_rate[AXIS_OF_ANGLE]);
 
 		 //prints values in readable units
-		 chprintf((BaseSequentialStream *)&SD3, "%Ax=%.2f Ay=%.2f Az=%.2f Gx=%.2f Gy=%.2f Gz=%.2f (%x)\r\n\n",
+		/* chprintf((BaseSequentialStream *)&SD3, "%Ax=%.2f Ay=%.2f Az=%.2f Gx=%.2f Gy=%.2f Gz=%.2f (%x)\r\n\n",
 				 imu_values.acceleration[X_AXIS], imu_values.acceleration[Y_AXIS], imu_values.acceleration[Z_AXIS],
 				 imu_values.gyro_rate[X_AXIS], imu_values.gyro_rate[Y_AXIS], imu_values.gyro_rate[Z_AXIS],
-				 imu_values.status);
-		 chThdSleepMilliseconds(1000);
+				 imu_values.status);*/
+		 chprintf((BaseSequentialStream *)&SD3, "%angle=%.4f\n",angle*180/3.141592653 );
+		 chThdSleepMilliseconds(10);
      }
 }
 void orientation_start(void)
@@ -75,7 +77,7 @@ void orientation_start(void)
 /*
  * will update the static variable "angle" based on the time integrale of
  * the angular velocity
- * 	input : angular_speed in the wanted direction
+ * 	input : angular_speed in the wanted direction [rad/s]
  */
 static void update_angle(float current_speed)
 {
@@ -83,7 +85,7 @@ static void update_angle(float current_speed)
 
 	// calculate dt
 	chSysLock();
-	uint16_t time = GPTD11.tim->CNT;
+	volatile uint16_t time = GPTD11.tim->CNT;
 	// integrate with triangle methode
 	angle += 0.5*(previous_speed+current_speed)*TIM2SEC(time);
 	GPTD11.tim->CNT = 0;

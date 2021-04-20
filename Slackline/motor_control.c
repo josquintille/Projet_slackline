@@ -30,8 +30,8 @@ static THD_FUNCTION(motor_control_thd, arg) {
      {
 		speed = regulator_speed(get_angle());
 		//applies the speed from the PI regulator
-		right_motor_set_speed(speed);
-		left_motor_set_speed(speed);
+		//right_motor_set_speed(speed);
+		//left_motor_set_speed(speed);
 
 		chThdSleepMilliseconds(1000);
      }
