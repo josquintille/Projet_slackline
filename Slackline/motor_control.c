@@ -10,8 +10,8 @@
 #include <motors.h>
 
 // regulator variable
-#define Ki	1
-#define Kp 1000
+#define Ki	0
+#define Kp 2000
 #define AWM_MIN  -100
 #define AWM_MAX  -AWM_MIN
 /*
@@ -28,12 +28,12 @@ static THD_FUNCTION(motor_control_thd, arg) {
      int speed = 0;
      while(1)
      {
-		speed = regulator_speed(get_angle());
+		speed = regulator_speed(-get_angle());
 		//applies the speed from the PI regulator
-		//right_motor_set_speed(speed);
-		//left_motor_set_speed(speed);
+		right_motor_set_speed(speed);
+		left_motor_set_speed(speed);
 
-		chThdSleepMilliseconds(1000);
+		chThdSleepMilliseconds(100);
      }
 }
 
@@ -51,7 +51,7 @@ void motor_control_start(void)
 static int regulator_speed(float input_angle)
 { // pi regulator
 	static int integ = 0;
-
+	input_angle = input_angle*input_angle*input_angle;
 	integ += Ki * input_angle;
 	// AWM
 	if(integ > AWM_MAX)
