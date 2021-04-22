@@ -8,17 +8,19 @@
 #include "motor_control.h"
 #include "orientation.h"
 #include <motors.h>
+#include <math.h>
 
 // regulator variable
-#define Ki	0
-#define Kp 2000
+#define Ki	2
+#define Kp 1500
+#define Kd 500
 #define AWM_MIN  -100
 #define AWM_MAX  -AWM_MIN
 /*
  *  Dc part of the regulator (PI regulator)
  *  input: difference between angle and goal angle
  */
-static int regulator_speed(float input_angle);
+static int regulator_speed(float input_angle, float input_speed);
 
 static THD_WORKING_AREA(motor_control_thd_wa, 512);
 static THD_FUNCTION(motor_control_thd, arg) {
@@ -28,12 +30,20 @@ static THD_FUNCTION(motor_control_thd, arg) {
      int speed = 0;
      while(1)
      {
-		speed = regulator_speed(-get_angle());
+		speed = regulator_speed(-get_angle(), -get_ang_speed());
 		//applies the speed from the PI regulator
-		right_motor_set_speed(speed);
-		left_motor_set_speed(speed);
+		if(fabs(speed)>50)
+		{
+			right_motor_set_speed(speed);
+			left_motor_set_speed(speed);
+		}
+		else
+		{
+			right_motor_set_speed(0);
+			left_motor_set_speed(0);
+		}
 
-		chThdSleepMilliseconds(100);
+		chThdSleepMilliseconds(1);
      }
 }
 
@@ -45,13 +55,12 @@ void motor_control_start(void)
 	orientation_start();
 
 	// launch the thread
-	chThdCreateStatic(motor_control_thd_wa, sizeof(motor_control_thd_wa), NORMALPRIO, motor_control_thd, NULL);
+	chThdCreateStatic(motor_control_thd_wa, sizeof(motor_control_thd_wa), NORMALPRIO+1, motor_control_thd, NULL);
 }
 
-static int regulator_speed(float input_angle)
+static int regulator_speed(float input_angle, float input_speed)
 { // pi regulator
 	static int integ = 0;
-	input_angle = input_angle*input_angle*input_angle;
 	integ += Ki * input_angle;
 	// AWM
 	if(integ > AWM_MAX)
@@ -59,5 +68,5 @@ static int regulator_speed(float input_angle)
 	else if (integ < AWM_MIN )
 		integ = AWM_MIN;
 
-	return Kp*input_angle + integ;
+	return Kp*input_angle + integ + input_speed*Kd;
 }

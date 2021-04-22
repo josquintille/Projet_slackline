@@ -11,5 +11,6 @@
 void orientation_start(void);
 
 float get_angle(void);
+float get_ang_speed(void);
 
 #endif /* ORIENTATION_H_ */

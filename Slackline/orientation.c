@@ -35,6 +35,7 @@ MUTEX_DECL(bus_lock);
 CONDVAR_DECL(bus_condvar);
 
 static float angle = 0;
+static float ang_speed = 0;
 
 static void timer11_start(void);
 static void update_angle_gyro(float current_speed);
@@ -58,12 +59,14 @@ static THD_FUNCTION(orientation_thd, arg)
     	 //update_angle_gyro(imu_values.gyro_rate[AXIS_OF_ANGLE]);
     	 update_angle_acc(imu_values.acceleration);
 
+    	 ang_speed = imu_values.gyro_rate[AXIS_OF_ANGLE];
+
 		 //prints values in readable units
 		 /*chprintf((BaseSequentialStream *)&SD3, "%Ax=%.4f Ay=%.4f Az=%.4f Gx=%.4f Gy=%.4f Gz=%.4f (%x)\n\n",
 				 imu_values.acceleration[X_AXIS], imu_values.acceleration[Y_AXIS], imu_values.acceleration[Z_AXIS],
 				 imu_values.gyro_rate[X_AXIS], imu_values.gyro_rate[Y_AXIS], imu_values.gyro_rate[Z_AXIS],
 				 imu_values.status);*/
-		 chprintf((BaseSequentialStream *)&SD3, "%angle=%.4f\n",angle*180/3.141592653 );
+		// chprintf((BaseSequentialStream *)&SD3, "%angle=%.4f\n",angle*180/3.141592653 );
 
 		 // go to sleep
 		 chThdSleepUntilWindowed(time, time + MS2ST(THREAD_PERIODE));
@@ -115,7 +118,7 @@ static bool is_device_stable(float acceleration[])
 		module_sq = acceleration[i]*acceleration[i];
 	}
 
-	return abs(module_sq-STD_GRAVITY*STD_GRAVITY) < GRAVITY_DEVIATION;
+	return fabs(module_sq-STD_GRAVITY*STD_GRAVITY) < GRAVITY_DEVIATION;
 }
 static void update_angle_acc(float acceleration[])
 {
@@ -141,5 +144,9 @@ static void timer11_start(void)
 float get_angle(void)
 {
 	return angle;
+}
+float get_ang_speed(void)
+{
+	return ang_speed;
 }
 
