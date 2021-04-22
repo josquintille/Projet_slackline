@@ -14,7 +14,9 @@ extern "C" {
 #define IMAGE_BUFFER_SIZE		640
 
 /** Robot wide IPC bus. */
+//extern messagebus_t bus;
 extern messagebus_t bus;
+
 
 extern parameter_namespace_t parameter_root;
 

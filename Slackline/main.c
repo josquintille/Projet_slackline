@@ -7,6 +7,7 @@
 #include "hal.h"
 #include "memory_protection.h"
 #include "sensors/VL53L0X/VL53L0X.h"
+#include "sensors/proximity.h"
 #include <usbcfg.h>
 #include <main.h>
 #include <motors.h>
@@ -14,6 +15,11 @@
 #include <chprintf.h>
 
 #include <motor_control.h>
+
+
+messagebus_t bus;
+MUTEX_DECL(bus_lock);
+CONDVAR_DECL(bus_condvar);
 
 void SendUint8ToComputer(uint8_t* data, uint16_t size) 
 {
@@ -36,35 +42,47 @@ static void serial_start(void)
 
 int main(void)
 {
-
     halInit();
     chSysInit();
     mpu_init();
+
+    /** Inits the Inter Process Communication bus. */
+    messagebus_init(&bus, &bus_lock, &bus_condvar);
 
     //starts the serial communication
     serial_start();
     //start the USB communication
     //usb_start();
     //starts the camera
-    dcmi_start();
-	po8030_start();
+    //dcmi_start();
+	//po8030_start();
 	//inits the motors
 	motors_init();
+
 	//start the TOF sensor
 	VL53L0X_start();
 
+	//start the 8 proximity sensors and calibrate
+	proximity_start();
+	messagebus_topic_t *prox_topic = messagebus_find_topic_blocking(&bus, "/proximity"); //va en panic
+	proximity_msg_t prox_values;
+	calibrate_ir();
+
 	//stars the threads for the pi regulator and the processing of the image
 	motor_control_start();
-	//process_image_start();
 
     /* Infinite loop. */
     while (1) {
-    	//read distance sensor and send via USB (serial by wire)
+    	//read distance sensor and send via Bluetooth
     	chprintf((BaseSequentialStream *)&SD3, "DISTANCE SENSOR (TOF):\t");
-    	chprintf((BaseSequentialStream *)&SD3, "%d\n", VL53L0X_get_dist_mm());
+    	chprintf((BaseSequentialStream *)&SD3, "%d\n\n", VL53L0X_get_dist_mm());
 
-    	//waits 1 second
-        chThdSleepMilliseconds(1000);
+    	//read proximity sensors and send via USB (serial by wire)
+    	chprintf((BaseSequentialStream *)&SD3, "PROXIMITY SENSOR 0:\t");
+		chprintf((BaseSequentialStream *)&SD3, "%d\n", get_prox(0));
+
+    	//waits 0.5 second
+        chThdSleepMilliseconds(500);
     }
 }
 
