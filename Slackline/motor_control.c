@@ -30,7 +30,7 @@ static THD_FUNCTION(motor_control_thd, arg) {
      int speed = 0;
      while(1)
      {
-		speed = regulator_speed(-get_angle(), -get_ang_speed());
+		speed = regulator_speed(-get_angle(), get_ang_speed());
 		//applies the speed from the PI regulator
 		if(fabs(speed)>50)
 		{
