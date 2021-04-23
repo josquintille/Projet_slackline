@@ -116,7 +116,7 @@ static void update_angle_gyro(float current_speed)
 	// modify : use sleepUntilwindowed !!!
 	chSysUnlock();
 
-	GPTD11.tim->CNT = 0;	// IS IT A GOOD IDEA ?
+	GPTD11.tim->CNT = 0;
 	previous_speed = current_speed;
 }
 static bool is_device_stable(float acceleration[])
@@ -153,5 +153,17 @@ static void timer11_start(void)
 float get_angle(void)
 {
 	return angle;
+}
+
+/*	We have to define the imu bus elsewhere (main? or static here?) to use this function
+float get_angular_speed(void)
+{
+	return imu_values.gyro_rate[AXIS_OF_ANGLE];
+}*/
+
+// maybe rename after we choose only one way to compute angle
+float get_angle_gyro(void)
+{
+	return angle_gyro;
 }
 
