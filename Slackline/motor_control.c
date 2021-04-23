@@ -11,11 +11,12 @@
 #include <math.h>
 
 // regulator variable
-#define Ki	2
-#define Kp 1500
-#define Kd 500
-#define AWM_MIN  -100
-#define AWM_MAX  -AWM_MIN
+#define Ki	10
+#define Kp 0
+#define Kd -1000
+#define AWM_MAX  300
+#define AWM_MIN  -AWM_MAX
+#define MIN_SPEED 60
 /*
  *  Dc part of the regulator (PI regulator)
  *  input: difference between angle and goal angle
@@ -30,9 +31,9 @@ static THD_FUNCTION(motor_control_thd, arg) {
      int speed = 0;
      while(1)
      {
-		speed = regulator_speed(-get_angle(), get_ang_speed());
+		speed = regulator_speed(get_angle(), -get_ang_speed());
 		//applies the speed from the PI regulator
-		if(fabs(speed)>50)
+		if(fabs(speed)>MIN_SPEED)
 		{
 			right_motor_set_speed(speed);
 			left_motor_set_speed(speed);
@@ -59,14 +60,19 @@ void motor_control_start(void)
 }
 
 static int regulator_speed(float input_angle, float input_speed)
-{ // pi regulator
+{ // pid regulator
+	//integrator
 	static int integ = 0;
-	integ += Ki * input_angle;
+	integ += Ki * input_speed;
 	// AWM
 	if(integ > AWM_MAX)
 		integ = AWM_MAX;
 	else if (integ < AWM_MIN )
 		integ = AWM_MIN;
 
-	return Kp*input_angle + integ + input_speed*Kd;
+	static int deriv = 0;
+	if ((signbit(input_speed) != signbit(input_angle)) & (input_speed>.5f))
+		deriv = input_speed*Kd;
+
+	return Kp*input_angle + integ + deriv;
 }

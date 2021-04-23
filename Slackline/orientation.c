@@ -25,10 +25,10 @@
 #define TIM2SEC(tim) 	tim/1e6
 
 #define STD_GRAVITY 		9.855f
-#define GRAVITY_DEVIATION	 0.12f
+#define GRAVITY_DEVIATION	 0.12f*10
 #define GRAVITY_AXIS 	Y_AXIS
 
-#define THREAD_PERIODE 10 //[ms]
+#define THREAD_PERIODE 5 //[ms]
 // Bus to communicate with the IMU
 messagebus_t bus;
 MUTEX_DECL(bus_lock);
@@ -39,7 +39,7 @@ static float ang_speed = 0;
 
 static void timer11_start(void);
 static void update_angle_gyro(float current_speed);
-static bool is_device_stable(float acceleration[]);
+static uint8_t is_device_stable(float acceleration[]);
 static void update_angle_acc(float acceleration[]);
 
 static THD_WORKING_AREA(orientation_thd_wa, 512);
@@ -57,19 +57,24 @@ static THD_FUNCTION(orientation_thd, arg)
     	 time = chVTGetSystemTime();
     	 messagebus_topic_wait(imu_topic, &imu_values, sizeof(imu_values));
     	 //update_angle_gyro(imu_values.gyro_rate[AXIS_OF_ANGLE]);
-    	 update_angle_acc(imu_values.acceleration);
+    	 if(is_device_stable(imu_values.acceleration))
+    		 update_angle_acc(imu_values.acceleration);
+    	 else
+    		 update_angle_gyro(imu_values.gyro_rate[AXIS_OF_ANGLE]);
 
     	 ang_speed = imu_values.gyro_rate[AXIS_OF_ANGLE];
 
 		 //prints values in readable units
-		 /*chprintf((BaseSequentialStream *)&SD3, "%Ax=%.4f Ay=%.4f Az=%.4f Gx=%.4f Gy=%.4f Gz=%.4f (%x)\n\n",
+		/* chprintf((BaseSequentialStream *)&SD3, "%Ax=%.4f Ay=%.4f Az=%.4f Gx=%.4f Gy=%.4f Gz=%.4f (%x)\n\n",
 				 imu_values.acceleration[X_AXIS], imu_values.acceleration[Y_AXIS], imu_values.acceleration[Z_AXIS],
 				 imu_values.gyro_rate[X_AXIS], imu_values.gyro_rate[Y_AXIS], imu_values.gyro_rate[Z_AXIS],
 				 imu_values.status);*/
-		// chprintf((BaseSequentialStream *)&SD3, "%angle=%.4f\n",angle*180/3.141592653 );
+		//chprintf((BaseSequentialStream *)&SD3, "%angle=%.4f\n",angle*180/3.141592653 );
+		//chprintf((BaseSequentialStream *)&SD3, "%speed=%.4f\n",imu_values.gyro_rate[AXIS_OF_ANGLE] );
 
 		 // go to sleep
 		 chThdSleepUntilWindowed(time, time + MS2ST(THREAD_PERIODE));
+		//chThdSleepMilliseconds(1);
      }
 }
 void orientation_start(void)
@@ -110,7 +115,7 @@ static void update_angle_gyro(float current_speed)
 
 	previous_speed = current_speed;
 }
-static bool is_device_stable(float acceleration[])
+static uint8_t is_device_stable(float acceleration[])
 {
 	float module_sq = 0;
 	for(uint8_t i = 0; i<NB_AXIS;i++)
@@ -122,7 +127,7 @@ static bool is_device_stable(float acceleration[])
 }
 static void update_angle_acc(float acceleration[])
 {
-	angle = asin(acceleration[GRAVITY_AXIS]/STD_GRAVITY);
+	angle = -asin(acceleration[GRAVITY_AXIS]/STD_GRAVITY);
 }
 static void timer11_start(void)
 {
