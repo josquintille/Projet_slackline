@@ -110,8 +110,8 @@ static void update_angle_gyro(float current_speed)
 		current_speed = 0;
 	}
 
-	// integrate with triangle method
-	angle += 0.5*(previous_speed+current_speed)*TIM2SEC(time);
+	// integrate with triangle method (- because gyro axis is opposed to acc axis)
+	angle_gyro -= 0.5*(previous_speed+current_speed)*TIM2SEC(time);
 
 	// modify : use sleepUntilwindowed !!!
 	chSysUnlock();
@@ -158,7 +158,7 @@ float get_angle(void)
 /*	We have to define the imu bus elsewhere (main? or static here?) to use this function
 float get_angular_speed(void)
 {
-	return imu_values.gyro_rate[AXIS_OF_ANGLE];
+	return -imu_values.gyro_rate[AXIS_OF_ANGLE];
 }*/
 
 // maybe rename after we choose only one way to compute angle
