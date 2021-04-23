@@ -64,7 +64,7 @@ int main(void)
 
 	//start the 8 proximity sensors and calibrate
 	proximity_start();
-	messagebus_topic_t *prox_topic = messagebus_find_topic_blocking(&bus, "/proximity"); //va en panic
+	messagebus_topic_t *prox_topic = messagebus_find_topic_blocking(&bus, "/proximity");
 	proximity_msg_t prox_values;
 	calibrate_ir();
 
@@ -77,9 +77,12 @@ int main(void)
     	chprintf((BaseSequentialStream *)&SD3, "DISTANCE SENSOR (TOF):\t");
     	chprintf((BaseSequentialStream *)&SD3, "%d\n\n", VL53L0X_get_dist_mm());
 
-    	//read proximity sensors and send via USB (serial by wire)
-    	chprintf((BaseSequentialStream *)&SD3, "PROXIMITY SENSOR 0:\t");
-		chprintf((BaseSequentialStream *)&SD3, "%d\n", get_prox(0));
+    	//read proximity sensors and send via Bluetooth
+    	for(unsigned int i = 0; i < 8; i++){
+        	chprintf((BaseSequentialStream *)&SD3, "PROXIMITY SENSOR %d:\t", i);
+    		chprintf((BaseSequentialStream *)&SD3, "%d\n", get_prox(i));
+    	}
+
 
     	//waits 0.5 second
         chThdSleepMilliseconds(500);
