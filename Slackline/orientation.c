@@ -23,6 +23,7 @@
 
 #define AXIS_OF_ANGLE 	X_AXIS
 #define TIM2SEC(tim) 	tim/1e6
+#define GYRO_DEVIATION		0.1		// NEEDS TO BE TUNED !!!
 
 #define STD_GRAVITY 		9.855f
 #define GRAVITY_DEVIATION	 0.12f
@@ -35,6 +36,7 @@ MUTEX_DECL(bus_lock);
 CONDVAR_DECL(bus_condvar);
 
 static float angle = 0;
+static float angle_gyro = 0;
 
 static void timer11_start(void);
 static void update_angle_gyro(float current_speed);
@@ -55,7 +57,7 @@ static THD_FUNCTION(orientation_thd, arg)
      {
     	 time = chVTGetSystemTime();
     	 messagebus_topic_wait(imu_topic, &imu_values, sizeof(imu_values));
-    	 //update_angle_gyro(imu_values.gyro_rate[AXIS_OF_ANGLE]);
+    	 update_angle_gyro(imu_values.gyro_rate[AXIS_OF_ANGLE]);
     	 update_angle_acc(imu_values.acceleration);
 
 		 //prints values in readable units
@@ -64,6 +66,8 @@ static THD_FUNCTION(orientation_thd, arg)
 				 imu_values.gyro_rate[X_AXIS], imu_values.gyro_rate[Y_AXIS], imu_values.gyro_rate[Z_AXIS],
 				 imu_values.status);*/
 		 chprintf((BaseSequentialStream *)&SD3, "%angle=%.4f\n",angle*180/3.141592653 );
+		 chprintf((BaseSequentialStream *)&SD3, "%angle_gyro=%.4f\n",angle_gyro*180/3.141592653 );
+		 chprintf((BaseSequentialStream *)&SD3, "%difference=%.4f\n\n",(angle-angle_gyro)*180/3.141592653 );
 
 		 // go to sleep
 		 chThdSleepUntilWindowed(time, time + MS2ST(THREAD_PERIODE));
@@ -88,7 +92,7 @@ void orientation_start(void)
 // integrate the angular speed to get the angle
 
 /*
- * will update the static variable "angle" based on the time integrale of
+ * will update the static variable "angle" based on the time integral of
  * the angular velocity
  * 	input : angular_speed in the wanted direction [rad/s]
  */
@@ -99,12 +103,20 @@ static void update_angle_gyro(float current_speed)
 	// calculate dt
 	chSysLock();
 	uint16_t time = GPTD11.tim->CNT;
-	// integrate with triangle methode
+
+	// check that current speed is not below noise level
+	if((current_speed <= GYRO_DEVIATION) && (current_speed >= -GYRO_DEVIATION))
+	{
+		current_speed = 0;
+	}
+
+	// integrate with triangle method
 	angle += 0.5*(previous_speed+current_speed)*TIM2SEC(time);
-	GPTD11.tim->CNT = 0;
-	// modifeir : utiliser sleepUntilwindowd !!!
+
+	// modify : use sleepUntilwindowed !!!
 	chSysUnlock();
 
+	GPTD11.tim->CNT = 0;	// IS IT A GOOD IDEA ?
 	previous_speed = current_speed;
 }
 static bool is_device_stable(float acceleration[])
