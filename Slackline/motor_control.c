@@ -11,12 +11,12 @@
 #include <math.h>
 
 // regulator variable
-#define Ki	10
-#define Kp 0
-#define Kd -1000
-#define AWM_MAX  300
+#define Ki	40
+#define Kp 3000
+#define Kd 100
+#define AWM_MAX  1000
 #define AWM_MIN  -AWM_MAX
-#define MIN_SPEED 60
+#define MIN_SPEED 50
 /*
  *  Dc part of the regulator (PI regulator)
  *  input: difference between angle and goal angle
@@ -29,9 +29,11 @@ static THD_FUNCTION(motor_control_thd, arg) {
      chRegSetThreadName(__FUNCTION__);
 
      int speed = 0;
+     static int intspeed = 0;
      while(1)
      {
-		speed = regulator_speed(get_angle(), -get_ang_speed());
+		speed = - regulator_speed(get_angle(), get_angular_speed());
+
 		//applies the speed from the PI regulator
 		if(fabs(speed)>MIN_SPEED)
 		{
@@ -43,7 +45,16 @@ static THD_FUNCTION(motor_control_thd, arg) {
 			right_motor_set_speed(0);
 			left_motor_set_speed(0);
 		}
-
+		// tombé
+		if(fabs(get_angle()) > 1)
+		{
+			right_motor_set_speed(0);
+			left_motor_set_speed(0);
+			chThdSleepMilliseconds(500);
+			right_motor_set_speed(1100);
+			left_motor_set_speed(1100);
+			chThdSleepMilliseconds(200);
+		}
 		chThdSleepMilliseconds(1);
      }
 }
@@ -63,7 +74,7 @@ static int regulator_speed(float input_angle, float input_speed)
 { // pid regulator
 	//integrator
 	static int integ = 0;
-	integ += Ki * input_speed;
+	integ += Ki * input_angle;
 	// AWM
 	if(integ > AWM_MAX)
 		integ = AWM_MAX;
@@ -71,7 +82,7 @@ static int regulator_speed(float input_angle, float input_speed)
 		integ = AWM_MIN;
 
 	static int deriv = 0;
-	if ((signbit(input_speed) != signbit(input_angle)) & (input_speed>.5f))
+	//if ((signbit(input_speed) == signbit(input_angle)) & (input_angle>.1f) )//& input_speed >.05f)
 		deriv = input_speed*Kd;
 
 	return Kp*input_angle + integ + deriv;
