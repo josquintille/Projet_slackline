@@ -17,11 +17,23 @@
 #define AWM_MAX  1000
 #define AWM_MIN  -AWM_MAX
 #define MIN_SPEED 50
+
+// recovery variable
+#define WAIT_UNTILL_DOWN 	500 //[ms]
+#define WAIT_UNTILL_UP 		200 // MS
+enum SIDE {BACK=-1, FRONT=1};
 /*
- *  Dc part of the regulator (PI regulator)
- *  input: difference between angle and goal angle
+ *  PID regulator
+ *  input: 	difference between angle and goal angle
+ *  		as well as the angular speed (in rad/s)
  */
 static int regulator_speed(float input_angle, float input_speed);
+/*
+ *
+ * sequence if the e-puck is down, boost him to recover the straight position
+ * input: the sign
+ */
+static void recover(int8_t side);
 
 static THD_WORKING_AREA(motor_control_thd_wa, 512);
 static THD_FUNCTION(motor_control_thd, arg) {
@@ -48,12 +60,7 @@ static THD_FUNCTION(motor_control_thd, arg) {
 		// tombé
 		if(fabs(get_angle()) > 1)
 		{
-			right_motor_set_speed(0);
-			left_motor_set_speed(0);
-			chThdSleepMilliseconds(500);
-			right_motor_set_speed(1100);
-			left_motor_set_speed(1100);
-			chThdSleepMilliseconds(200);
+
 		}
 		chThdSleepMilliseconds(1);
      }
@@ -86,4 +93,14 @@ static int regulator_speed(float input_angle, float input_speed)
 		deriv = input_speed*Kd;
 
 	return Kp*input_angle + integ + deriv;
+}
+
+static void recover(int8_t side)
+{
+	right_motor_set_speed(0);
+	left_motor_set_speed(0);
+	chThdSleepMilliseconds(WAIT_UNTILL_DOWN);
+	right_motor_set_speed(side*MOTOR_SPEED_LIMIT);
+	left_motor_set_speed(side*MOTOR_SPEED_LIMIT);
+	chThdSleepMilliseconds(WAIT_UNTILL_UP);
 }
