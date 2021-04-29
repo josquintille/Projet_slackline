@@ -42,10 +42,6 @@ static float angle = 0;
 static float angular_speed = 0;
 
 static void timer11_start(void);
-static bool is_device_stable(float acceleration[]);
-
-
-static void timer11_start(void);
 
 static void update_data(float acceleration[], float current_speed);
 
@@ -86,28 +82,26 @@ void orientation_start(void)
 static void update_data(float acceleration[], float current_speed)
 {
 	// angle from accelerometer (- because gyro and acc axes are not the same)
-	float angle_acc = -atan2(acceleration[AXIS_GRAVITY],-acceleration[AXIS_DOWN]);
-
+	float angle_acc_input = 0;
+	angle_acc_input = -atan2(acceleration[AXIS_GRAVITY],-acceleration[AXIS_DOWN]);
 
 	// apply low-pass filter to angle_acc
-	static float angle_acc_prev = 0; //previous acc angle
-	float angle_acc_f = FILTER_FACTOR*angle_acc_prev + (1-FILTER_FACTOR)*angle_acc;
-	angle_acc_prev = angle_acc_f;
+	static float angle_acc_f = 0; //previous acc angle
+	angle_acc_f = FILTER_FACTOR*angle_acc_f + (1-FILTER_FACTOR)*angle_acc_input;
 
 	// angle from gyro (timer used to calculate dt)
+	static float angle_gyro = 0;
+	float angle_gyro_prev = angle_gyro;
 	chSysLock();
 	uint16_t time = GPTD11.tim->CNT;
 	GPTD11.tim->CNT = 0;
-	static float angle_gyro = 0;
 	angle_gyro += current_speed * TIM2SEC(time);
 	chSysUnlock();
 
-	// apply high-pass filter to angle_gyro
-	static float angle_gyro_prev_f = 0; //previous gyro angle, filtered
-	static float angle_gyro_prev_nf = 0; //previous gyro angle, not filtered
-	angle_gyro_prev_nf = angle_gyro;
-	float angle_gyro_f = FILTER_FACTOR*(angle_gyro_prev_f+angle_gyro-angle_gyro_prev_nf);
-	angle_gyro_prev_f = angle_gyro_f;
+
+	// apply high-pass complementary filter to angle_gyro
+	static float angle_gyro_f = 0; //previous gyro angle, filtered
+	angle_gyro_f = FILTER_FACTOR*(angle_gyro_f+angle_gyro-angle_gyro_prev);
 
 	// update angular speed
 	angular_speed = current_speed;
