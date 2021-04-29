@@ -10,6 +10,8 @@
 #include <motors.h>
 #include <math.h>
 
+#define SIDE(x)  (signbit(x) ?  BACK : FRONT)
+
 // regulator variable
 #define Ki	40
 #define Kp 3000
@@ -19,9 +21,16 @@
 #define MIN_SPEED 50
 
 // recovery variable
+#define CRITICAL_ANGLE 		1//[rad]
 #define WAIT_UNTILL_DOWN 	500 //[ms]
-#define WAIT_UNTILL_UP 		200 // MS
-enum SIDE {BACK=-1, FRONT=1};
+#define WAIT_UNTILL_UP 		200 // [ms]
+enum FALLEN_SIDE {BACK=-1,NONE = 0, FRONT=1};
+
+
+/*
+ *	set the both motor at the same speed
+ */
+static void set_motor_speed(int speed);
 /*
  *  PID regulator
  *  input: 	difference between angle and goal angle
@@ -31,37 +40,33 @@ static int regulator_speed(float input_angle, float input_speed);
 /*
  *
  * sequence if the e-puck is down, boost him to recover the straight position
- * input: the sign
+ * input: BACK or FRONT
  */
 static void recover(int8_t side);
+static int8_t get_falling_side(float angle, float speed);
 
 static THD_WORKING_AREA(motor_control_thd_wa, 512);
 static THD_FUNCTION(motor_control_thd, arg) {
      (void) arg;
      chRegSetThreadName(__FUNCTION__);
 
-     int speed = 0;
-     static int intspeed = 0;
+     int motor_speed = 0;
+     float angle = 0;
+     float angular_speed = 0;
+	 uint8_t falling_side = NONE;
      while(1)
      {
-		speed = - regulator_speed(get_angle(), get_angular_speed());
+    	 // get angle from IMU (orientation.h)
+    	 angle = get_angle();
+    	 angular_speed = get_angular_speed();
+		 motor_speed = -regulator_speed(angle, angular_speed);
+		 set_motor_speed(motor_speed);
+		// detect if the e-puck is down
+		if((falling_side = get_falling_side(angle, angular_speed)) != NONE)
+		{
+			recover(falling_side);
+		}
 
-		//applies the speed from the PI regulator
-		if(fabs(speed)>MIN_SPEED)
-		{
-			right_motor_set_speed(speed);
-			left_motor_set_speed(speed);
-		}
-		else
-		{
-			right_motor_set_speed(0);
-			left_motor_set_speed(0);
-		}
-		// tombé
-		if(fabs(get_angle()) > 1)
-		{
-
-		}
 		chThdSleepMilliseconds(1);
      }
 }
@@ -76,7 +81,20 @@ void motor_control_start(void)
 	// launch the thread
 	chThdCreateStatic(motor_control_thd_wa, sizeof(motor_control_thd_wa), NORMALPRIO+1, motor_control_thd, NULL);
 }
-
+static void set_motor_speed(int speed)
+{
+	// threshold to avoid jerk at low speed
+	if(fabs(speed) > MIN_SPEED)
+	{
+		right_motor_set_speed(speed);
+		left_motor_set_speed(speed);
+	}
+	else
+	{
+		right_motor_set_speed(0);
+		left_motor_set_speed(0);
+	}
+}
 static int regulator_speed(float input_angle, float input_speed)
 { // pid regulator
 	//integrator
@@ -88,19 +106,19 @@ static int regulator_speed(float input_angle, float input_speed)
 	else if (integ < AWM_MIN )
 		integ = AWM_MIN;
 
-	static int deriv = 0;
-	//if ((signbit(input_speed) == signbit(input_angle)) & (input_angle>.1f) )//& input_speed >.05f)
-		deriv = input_speed*Kd;
-
-	return Kp*input_angle + integ + deriv;
+	return Kp*input_angle + integ + input_speed*Kd;
 }
-
+static int8_t get_falling_side(float angle, float speed)
+{
+	if(fabs(angle) < CRITICAL_ANGLE && (SIDE(angle) != SIDE(speed)))
+		return NONE;
+	else
+		return SIDE(angle);
+}
 static void recover(int8_t side)
 {
-	right_motor_set_speed(0);
-	left_motor_set_speed(0);
+	set_motor_speed(0);
 	chThdSleepMilliseconds(WAIT_UNTILL_DOWN);
-	right_motor_set_speed(side*MOTOR_SPEED_LIMIT);
-	left_motor_set_speed(side*MOTOR_SPEED_LIMIT);
+	set_motor_speed(side*MOTOR_SPEED_LIMIT);
 	chThdSleepMilliseconds(WAIT_UNTILL_UP);
 }
