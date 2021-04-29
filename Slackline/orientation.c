@@ -27,11 +27,11 @@
 
 #define STD_GRAVITY 		9.855f
 #define GRAVITY_DEVIATION	 0.12f
-#define GRAVITY_AXIS 	Y_AXIS
+#define AXIS_GRAVITY 	Y_AXIS
+#define AXIS_DOWN		Z_AXIS
 
-#define ACC_COEF	0.005
-// NEEDS TO BE TUNED !!!
-#define GYRO_COEF	(1-ACC_COEF)// NEEDS TO BE TUNED !!!
+#define OMEGA_N			0.1// cut frequency of the complementary filters
+#define FILTER_FACTOR	0.99// exp(-OMEGA_N*THREAD_PERIODE)
 
 #define THREAD_PERIODE 1 //[ms]
 // Bus to communicate with the IMU
@@ -42,9 +42,10 @@ CONDVAR_DECL(bus_condvar);
 
 static float angle = 0;
 static float angular_speed = 0;
+static float temp_raw_angle_acc = 0; // for debugging, to be deleted
+static float temp_raw_angle_gyro = 0; // for debugging, to be deleted
 
 static void timer11_start(void);
-static bool is_device_stable(float acceleration[]);
 static void update_data(float acceleration[], float current_speed);
 
 static THD_WORKING_AREA(orientation_thd_wa, 512);
@@ -73,12 +74,16 @@ static THD_FUNCTION(orientation_thd, arg)
 				 imu_values.status);*/
 		 //chprintf((BaseSequentialStream *)&SD3, "%angle_acc=%.4f\n",angle_acc*180/3.141592653 );
 		//chprintf((BaseSequentialStream *)&SD3, "%angle_gyro=%.4f\n",angle_gyro*180/3.141592653 );
-    	 if (++i>5)
+    	 if (++i>10)
     	 {
 			 chprintf((BaseSequentialStream *)&SD3, "%angle = %.4f\n",angle*180/3.141592653 );
-			 chprintf((BaseSequentialStream *)&SD3, "%angular speed = %.4f\n\n",angular_speed*180/3.141592653 );
+			 chprintf((BaseSequentialStream *)&SD3, "%angular speed = %.4f\n",angular_speed*180/3.141592653 );
+			 chprintf((BaseSequentialStream *)&SD3, "%angle acc RAW = %.4f\n",temp_raw_angle_acc*180/3.141592653 );
+			 chprintf((BaseSequentialStream *)&SD3, "%angle gyro RAW = %.4f\n\n",temp_raw_angle_gyro*180/3.141592653 );
+
 			 i = 0;
     	 }
+
 		 // go to sleep
 		 chThdSleepUntilWindowed(time, time + MS2ST(THREAD_PERIODE));
      }
@@ -96,40 +101,39 @@ void orientation_start(void)
 	// launch the thread (priority +1 for the integrator)
 	chThdCreateStatic(orientation_thd_wa, sizeof(orientation_thd_wa), NORMALPRIO+1, orientation_thd, NULL);
 }
-static bool is_device_stable(float acceleration[])
-{
-	float module_sq = 0;
-	for(uint8_t i = 0; i<NB_AXIS;i++)
-	{
-		module_sq = acceleration[i]*acceleration[i];
-	}
-
-	return fabs(module_sq-STD_GRAVITY*STD_GRAVITY) < GRAVITY_DEVIATION;
-}
 static void update_data(float acceleration[], float current_speed)
 {
-		// check that current speed is not below noise level
-	if((current_speed <= GYRO_DEVIATION) && (current_speed >= -GYRO_DEVIATION))
-	{
-		current_speed = 0;
-	}
+	// angle from accelerometer (- because gyro and acc axes are not the same)
+	float angle_acc = -atan2(acceleration[AXIS_GRAVITY],-acceleration[AXIS_DOWN]);
+	temp_raw_angle_acc = angle_acc;
 
-	// angle from accelerometer
-	float angle_acc = atan2(acceleration[GRAVITY_AXIS],-acceleration[Z_AXIS]);
+	// apply low-pass filter to angle_acc
+	static float angle_acc_prev = 0; //previous acc angle
+	float angle_acc_f = FILTER_FACTOR*angle_acc_prev + (1-FILTER_FACTOR)*angle_acc;
+	angle_acc_prev = angle_acc_f;
 
-	// calculate dt
+
+	// angle from gyro (timer used to calculate dt)
 	chSysLock();
 	uint16_t time = GPTD11.tim->CNT;
 	GPTD11.tim->CNT = 0;
-	// angle variation from gyro
-	float angle_gyro = -current_speed * TIM2SEC(time);
+	static float angle_gyro = 0;
+	angle_gyro += current_speed * TIM2SEC(time);
 	chSysUnlock();
+	temp_raw_angle_gyro = angle_gyro;
+
+	// apply high-pass filter to angle_gyro
+	static float angle_gyro_prev_f = 0; //previous gyro angle, filtered
+	static float angle_gyro_prev_nf = 0; //previous gyro angle, not filtered
+	angle_gyro_prev_nf = angle_gyro;
+	float angle_gyro_f = FILTER_FACTOR*(angle_gyro_prev_f+angle_gyro-angle_gyro_prev_nf);
+	angle_gyro_prev_f = angle_gyro_f;
 
 	// update angular speed
-	angular_speed = -current_speed;
+	angular_speed = current_speed;
 
 	// update angle
-	angle = ACC_COEF*angle_acc + GYRO_COEF*(angle + angle_gyro);
+	angle = angle_acc_f + angle_gyro_f;
 }
 static void timer11_start(void)
 {
