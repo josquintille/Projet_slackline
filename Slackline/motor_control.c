@@ -59,7 +59,7 @@ static THD_FUNCTION(motor_control_thd, arg) {
     	 // get angle from IMU (orientation.h)
     	 angle = get_angle();
     	 angular_speed = get_angular_speed();
-		 motor_speed = -regulator_speed(angle, angular_speed);
+		 motor_speed = regulator_speed(angle, angular_speed);
 		 set_motor_speed(motor_speed);
 		// detect if the e-puck is down
 		if((falling_side = get_falling_side(angle, angular_speed)) != NONE)
@@ -119,6 +119,6 @@ static void recover(int8_t side)
 {
 	set_motor_speed(0);
 	chThdSleepMilliseconds(WAIT_UNTILL_DOWN);
-	set_motor_speed(-side*MOTOR_SPEED_LIMIT);
+	set_motor_speed(side*MOTOR_SPEED_LIMIT);
 	chThdSleepMilliseconds(WAIT_UNTILL_UP);
 }
