@@ -110,7 +110,7 @@ static int regulator_speed(float input_angle, float input_speed)
 }
 static int8_t get_falling_side(float angle, float speed)
 {
-	if(fabs(angle) < CRITICAL_ANGLE && (SIDE(angle) != SIDE(speed)))
+	if(fabs(angle) < CRITICAL_ANGLE || (SIDE(angle) != SIDE(speed)))
 		return NONE;
 	else
 		return SIDE(angle);
@@ -119,6 +119,6 @@ static void recover(int8_t side)
 {
 	set_motor_speed(0);
 	chThdSleepMilliseconds(WAIT_UNTILL_DOWN);
-	set_motor_speed(side*MOTOR_SPEED_LIMIT);
+	set_motor_speed(-side*MOTOR_SPEED_LIMIT);
 	chThdSleepMilliseconds(WAIT_UNTILL_UP);
 }
