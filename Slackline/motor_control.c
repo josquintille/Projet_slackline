@@ -59,10 +59,12 @@ static THD_FUNCTION(motor_control_thd, arg) {
      float angle = 0;
      float angular_speed = 0;
 	 uint8_t falling_side = NONE;
+
+	 uint8_t can_move = TRUE;
+	 uint8_t is_close = FALSE;
      while(1)
      {
 
-     	chprintf((BaseSequentialStream *)&SD3, "%d\n", VL53L0X_get_dist_mm());
 
 
 		// get angle from IMU (orientation.h)
@@ -71,10 +73,27 @@ static THD_FUNCTION(motor_control_thd, arg) {
 
 		if(VL53L0X_get_dist_mm()<100)
 		{
-			angle+=0.5;
+			angle += .3;
+			if(!is_close)
+			{
+				can_move = FALSE;
+				is_close = TRUE;
+			}
 		}
-		 motor_speed = regulator_speed(angle, angular_speed);
-		 set_motor_speed(motor_speed);
+		else
+			is_close = FALSE;
+		if(VL53L0X_get_dist_mm()<100 && fabs(angle)<.2 && can_move)
+		{
+			if(motor_speed>-500)
+				motor_speed -= 1;
+		}
+		else
+		{
+			motor_speed = regulator_speed(angle, angular_speed);
+			if(fabs(motor_speed)<MIN_SPEED)
+				can_move = 1;
+		}
+		set_motor_speed(motor_speed);
 		// detect if the e-puck is down
 		falling_side = get_falling_side(angle, angular_speed);
 		if(falling_side != NONE)
