@@ -7,14 +7,19 @@
 
 #include "motor_control.h"
 #include "orientation.h"
+#include "sensors/VL53L0X/VL53L0X.h"
+
 #include <motors.h>
 #include <math.h>
+
+			#include <ch.h>
+			#include <chprintf.h>
 
 #define SIDE(x)  (signbit(x) ?  BACK : FRONT)
 
 // regulator variable
 #define Ki	40
-#define Kp 3000
+#define Kp 2700
 #define Kd 100
 #define AWM_MAX  1000
 #define AWM_MIN  -AWM_MAX
@@ -56,13 +61,23 @@ static THD_FUNCTION(motor_control_thd, arg) {
 	 uint8_t falling_side = NONE;
      while(1)
      {
-    	 // get angle from IMU (orientation.h)
-    	 angle = get_angle();
-    	 angular_speed = get_angular_speed();
+
+     	chprintf((BaseSequentialStream *)&SD3, "%d\n", VL53L0X_get_dist_mm());
+
+
+		// get angle from IMU (orientation.h)
+		angle = get_angle();
+		angular_speed = get_angular_speed();
+
+		if(VL53L0X_get_dist_mm()<100)
+		{
+			angle+=0.5;
+		}
 		 motor_speed = regulator_speed(angle, angular_speed);
 		 set_motor_speed(motor_speed);
 		// detect if the e-puck is down
-		if((falling_side = get_falling_side(angle, angular_speed)) != NONE)
+		falling_side = get_falling_side(angle, angular_speed);
+		if(falling_side != NONE)
 		{
 			recover(falling_side);
 		}
@@ -77,6 +92,8 @@ void motor_control_start(void)
 	motors_init();
 	// setup IMU
 	orientation_start();
+	// setup TOF
+	VL53L0X_start();
 
 	// launch the thread
 	chThdCreateStatic(motor_control_thd_wa, sizeof(motor_control_thd_wa), NORMALPRIO+1, motor_control_thd, NULL);

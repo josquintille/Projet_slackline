@@ -28,7 +28,7 @@
 #define AXIS_DOWN		Z_AXIS
 
 #define OMEGA_N			0.1// cut frequency of the complementary filters
-#define FILTER_FACTOR	0.99// exp(-OMEGA_N*THREAD_PERIODE)
+#define FILTER_FACTOR	0.985// exp(-OMEGA_N*THREAD_PERIODE)
 
 
 #define THREAD_PERIODE 1 //[ms]
@@ -71,8 +71,8 @@ void orientation_start(void)
 	// timer
 	timer11_start();
 	// setup IMU
-	imu_start();
 	messagebus_init(&bus, &bus_lock, &bus_condvar);
+	imu_start();
 	calibrate_acc();
 	calibrate_gyro();
 
