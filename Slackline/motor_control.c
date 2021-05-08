@@ -25,14 +25,18 @@
 #define AWM_MIN  -AWM_MAX
 #define MIN_SPEED 50
 
+#define STABLE_ANGLE 0.05 //[rad]
+#define STABLE_SPEED 0.05 //[rad/s]
+
 // target moving parameters
-#define DISTANCE_NEAR 5 //[mm]
-#define DISTANCE_FAR 15 // [mm]
+#define MIN_TARGET_DISTANCE 70 //[mm]
+#define MAX_TARGET_DISTANCE 130 // [mm]
 #define LEAN_SPEED 200
-#define LEAN_ANGLE 0.1f //[rad]
+#define LEAN_ANGLE 0.3f //[rad]
+#define FALL_SPEED 1.5 //[rad/s]
 #define MOVING_SPEED 700
 
-enum MOVING_SEQUENCE {LEAN, LET_FALL, MOVE, DONE};
+enum MOVING_SEQUENCE {LEAN, LET_FALL, MOVE, DONE, NOT_DONE};
 
 // recovery parameters
 #define CRITICAL_ANGLE 		1//[rad]
@@ -56,7 +60,7 @@ static int regulator_speed(float input_angle, float input_speed);
 /*
  * move the e-puck away or toward the target
  * in  : side Back or front, angle, angular speed of the e-pcuk
- * out : 0 if still moving 1
+ * out : NOT_DONE if still moving, DONE if done
  */
 static uint8_t move(int8_t side, float input_angle, float input_speed);
 /*
@@ -75,17 +79,25 @@ static THD_FUNCTION(motor_control_thd, arg) {
      int motor_speed = 0;
      float angle = 0;
      float angular_speed = 0;
-	 uint8_t falling_side = NONE;
+	 int8_t falling_side = NONE;
+	 uint8_t is_moving_back = FALSE;
 
+	 uint8_t is_moving_front = FALSE;
      while(1)
      {	// get angle from IMU (orientation.h)
 		angle = get_angle();
 		angular_speed = get_angular_speed();
 
-
-		motor_speed = 0;//regulator_speed(angle, angular_speed);
-
-		set_motor_speed(motor_speed);
+		volatile  int dist = get_target_distance();
+		if((get_target_distance() < MIN_TARGET_DISTANCE || is_moving_back) && !is_moving_front)
+			is_moving_back = move(BACK,angle,angular_speed)==DONE?FALSE:TRUE;
+		else if((get_target_distance() > MAX_TARGET_DISTANCE || is_moving_front))
+			is_moving_front = move(FRONT,angle,angular_speed)==DONE?FALSE:TRUE;
+		else
+		{
+			motor_speed = regulator_speed(angle, angular_speed);
+			set_motor_speed(motor_speed);
+		}
 
 		// detect if the e-puck is down
 		falling_side = get_falling_side(angle, angular_speed);
@@ -150,10 +162,31 @@ static uint8_t move(int8_t side, float input_angle, float input_speed)
 		set_motor_speed(-side*LEAN_SPEED);
 		break;
 	case LEAN:
-		if(input_angle  )
-
+		if(fabs(input_angle) >= LEAN_ANGLE )
+		{
+			state = LET_FALL;
+			set_motor_speed(0);
+		}
+		break;
+	case LET_FALL:
+		if(fabs(input_speed) >= FALL_SPEED )
+		{
+			state = MOVE;
+			set_motor_speed(side*MOVING_SPEED);
+		}
+		break;
+	case MOVE:
+		if(fabs(input_angle) <= STABLE_ANGLE )
+		{
+			state = DONE;
+			set_motor_speed(0);
+		}
+		return DONE;
+	default:
+		return NOT_DONE;
 	}
-	return 0;
+
+	return NOT_DONE;
 }
 
 static int8_t get_falling_side(float angle, float speed)
