@@ -12,6 +12,7 @@ GLOBAL_PATH = ../../lib/e-puck2_main-processor
 CSRC += ./main.c \
 		./motor_control.c \
 		./orientation.c \
+		./distance.c \
 #Header folders to include
 INCDIR += 
 

@@ -7,17 +7,17 @@
 
 #include "motor_control.h"
 #include "orientation.h"
-#include "sensors/VL53L0X/VL53L0X.h"
+#include "distance.h"
 
 #include <motors.h>
 #include <math.h>
 
 			#include <ch.h>
-			#include <chprintf.h>
+			#include <chprintf.h> //chprintf((BaseSequentialStream *)&SD3, "distance = %d\n",get_target_distance() );
 
 #define SIDE(x)  (signbit(x) ?  BACK : FRONT)
 
-// regulator variable
+// regulator parameters
 #define Ki	40
 #define Kp 2700
 #define Kd 100
@@ -25,11 +25,21 @@
 #define AWM_MIN  -AWM_MAX
 #define MIN_SPEED 50
 
-// recovery variable
+// target moving parameters
+#define DISTANCE_NEAR 5 //[mm]
+#define DISTANCE_FAR 15 // [mm]
+#define LEAN_SPEED 200
+#define LEAN_ANGLE 0.1f //[rad]
+#define MOVING_SPEED 700
+
+enum MOVING_SEQUENCE {LEAN, LET_FALL, MOVE, DONE};
+
+// recovery parameters
 #define CRITICAL_ANGLE 		1//[rad]
 #define WAIT_UNTILL_DOWN 	500 //[ms]
 #define WAIT_UNTILL_UP 		200 // [ms]
-enum FALLEN_SIDE {BACK=-1,NONE = 0, FRONT=1};
+enum PUCK_SIDE {BACK=-1,NONE = 0, FRONT=1};
+
 
 
 /*
@@ -42,10 +52,17 @@ static void set_motor_speed(int speed);
  *  		as well as the angular speed (in rad/s)
  */
 static int regulator_speed(float input_angle, float input_speed);
+
+/*
+ * move the e-puck away or toward the target
+ * in  : side Back or front, angle, angular speed of the e-pcuk
+ * out : 0 if still moving 1
+ */
+static uint8_t move(int8_t side, float input_angle, float input_speed);
 /*
  *
  * sequence if the e-puck is down, boost him to recover the straight position
- * input: BACK or FRONT
+ * input: BACK or FRONT, the side where the e-puck is down
  */
 static void recover(int8_t side);
 static int8_t get_falling_side(float angle, float speed);
@@ -60,47 +77,22 @@ static THD_FUNCTION(motor_control_thd, arg) {
      float angular_speed = 0;
 	 uint8_t falling_side = NONE;
 
-	 uint8_t can_move = TRUE;
-	 uint8_t is_close = FALSE;
      while(1)
-     {
-
-
-
-		// get angle from IMU (orientation.h)
+     {	// get angle from IMU (orientation.h)
 		angle = get_angle();
 		angular_speed = get_angular_speed();
 
-		if(VL53L0X_get_dist_mm()<100)
-		{
-			angle += .3;
-			if(!is_close)
-			{
-				can_move = FALSE;
-				is_close = TRUE;
-			}
-		}
-		else
-			is_close = FALSE;
-		if(VL53L0X_get_dist_mm()<100 && fabs(angle)<.2 && can_move)
-		{
-			if(motor_speed>-500)
-				motor_speed -= 1;
-		}
-		else
-		{
-			motor_speed = regulator_speed(angle, angular_speed);
-			if(fabs(motor_speed)<MIN_SPEED)
-				can_move = 1;
-		}
+
+		motor_speed = 0;//regulator_speed(angle, angular_speed);
+
 		set_motor_speed(motor_speed);
+
 		// detect if the e-puck is down
 		falling_side = get_falling_side(angle, angular_speed);
 		if(falling_side != NONE)
-		{
 			recover(falling_side);
-		}
 
+		// let other thread work
 		chThdSleepMilliseconds(1);
      }
 }
@@ -112,11 +104,12 @@ void motor_control_start(void)
 	// setup IMU
 	orientation_start();
 	// setup TOF
-	VL53L0X_start();
+	init_distance();
 
 	// launch the thread
 	chThdCreateStatic(motor_control_thd_wa, sizeof(motor_control_thd_wa), NORMALPRIO+1, motor_control_thd, NULL);
 }
+
 static void set_motor_speed(int speed)
 {
 	// threshold to avoid jerk at low speed
@@ -131,6 +124,7 @@ static void set_motor_speed(int speed)
 		left_motor_set_speed(0);
 	}
 }
+
 static int regulator_speed(float input_angle, float input_speed)
 { // pid regulator
 	//integrator
@@ -144,6 +138,24 @@ static int regulator_speed(float input_angle, float input_speed)
 
 	return Kp*input_angle + integ + input_speed*Kd;
 }
+
+
+static uint8_t move(int8_t side, float input_angle, float input_speed)
+{
+	static enum MOVING_SEQUENCE state = DONE;
+	switch(state)
+	{
+	case DONE:
+		state = LEAN;
+		set_motor_speed(-side*LEAN_SPEED);
+		break;
+	case LEAN:
+		if(input_angle  )
+
+	}
+	return 0;
+}
+
 static int8_t get_falling_side(float angle, float speed)
 {
 	if(fabs(angle) < CRITICAL_ANGLE || (SIDE(angle) != SIDE(speed)))
@@ -151,6 +163,7 @@ static int8_t get_falling_side(float angle, float speed)
 	else
 		return SIDE(angle);
 }
+
 static void recover(int8_t side)
 {
 	set_motor_speed(0);
