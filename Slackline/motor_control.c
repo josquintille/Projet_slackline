@@ -11,24 +11,25 @@
 
 // regulator variable
 #define Ki	0
-#define Kp 2000
+#define Kp 1
 #define AWM_MIN  -100
 #define AWM_MAX  -AWM_MIN
 /*
  *  Dc part of the regulator (PI regulator)
  *  input: difference between angle and goal angle
  */
-static int regulator_speed(float input_angle);
+static int16_t regulator_speed(int16_t input_angle);
 
 static THD_WORKING_AREA(motor_control_thd_wa, 512);
 static THD_FUNCTION(motor_control_thd, arg) {
      (void) arg;
      chRegSetThreadName(__FUNCTION__);
 
-     int speed = 0;
+     int16_t speed = 0;
      while(1)
      {
 		speed = regulator_speed(get_angle());
+
 		//applies the speed from the PI regulator
 		right_motor_set_speed(speed);
 		left_motor_set_speed(speed);
@@ -48,9 +49,9 @@ void motor_control_start(void)
 	chThdCreateStatic(motor_control_thd_wa, sizeof(motor_control_thd_wa), NORMALPRIO, motor_control_thd, NULL);
 }
 
-static int regulator_speed(float input_angle)
+static int16_t regulator_speed(int16_t input_angle)
 { // pi regulator
-	static int integ = 0;
+	static int16_t integ = 0;
 
 	integ += Ki * input_angle;
 	// AWM

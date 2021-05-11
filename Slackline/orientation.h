@@ -8,9 +8,11 @@
 #ifndef ORIENTATION_H_
 #define ORIENTATION_H_
 
+#include <stdint.h>
+
 void orientation_start(void);
 
-float get_angle(void);
-float get_angular_speed(void);
+int16_t get_angle(void);
+int16_t get_angular_speed(void);
 
 #endif /* ORIENTATION_H_ */

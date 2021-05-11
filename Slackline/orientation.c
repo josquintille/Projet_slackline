@@ -25,19 +25,19 @@
 #define MAX_INT16   32768.0f
 
 #define TIM2SEC(tim) 	tim/1e6
-#define RAD2mDEG(rad)	(rad*1e3*3.1415/180)
+#define RAD2cDEG(rad)	(rad*1e2*3.1415/180)
 #define GYRO_RAW2DPS        (RES_250DPS / MAX_INT16)   //250DPS (degrees per second) scale for int16 raw value
-#define GYRO_RAW2mDPS(raw)	raw*GYRO_RAW2DPS*1e3
+#define GYRO_RAW2cDPS(raw)	raw*GYRO_RAW2DPS*1e2
 
 #define AXIS_OF_ANGLE 	X_AXIS
 #define AXIS_GRAVITY 	Y_AXIS
 #define AXIS_DOWN		Z_AXIS
 
-#define OMEGA_N			0.1// cut frequency of the complementary filters
-#define FILTER_FACTOR	0.99// exp(-OMEGA_N*THREAD_PERIODE)
+//#define OMEGA_N			0.1// cut frequency of the complementary filters
+#define FILTER_FACTOR	99// 100*exp(-OMEGA_N*THREAD_PERIODE)
 
 #define THREAD_PERIODE 1 //[ms]
-#define CORRECTION_GYRO 3.9
+#define CORRECTION_GYRO 4
 
 // Bus to communicate with the IMU
 messagebus_t bus;
@@ -45,12 +45,12 @@ MUTEX_DECL(bus_lock);
 CONDVAR_DECL(bus_condvar);
 
 
-static int32_t angle = 0;
-static int32_t angular_speed = 0;
+static int16_t angle = 0; // unit = centidegree
+static int16_t angular_speed = 0; // unit = centidegree per second
 //static float temp_raw_angle_acc = 0; // for debugging, to be deleted
 //static float temp_raw_angle_gyro = 0; // for debugging, to be deleted
 
-static void update_data(int32_t acceleration[], int32_t current_speed);
+static void update_data(int16_t acceleration[], int16_t current_speed);
 
 static THD_WORKING_AREA(orientation_thd_wa, 512);
 static THD_FUNCTION(orientation_thd, arg)
@@ -68,8 +68,8 @@ static THD_FUNCTION(orientation_thd, arg)
     	 time = chVTGetSystemTime();
     	 messagebus_topic_wait(imu_topic, &imu_values, sizeof(imu_values));
 
-    	 int32_t acc[3] = {imu_values.acc_raw[X_AXIS], imu_values.acc_raw[Y_AXIS], imu_values.acc_raw[Z_AXIS]};
-    	 int32_t gyro = imu_values.gyro_raw[AXIS_OF_ANGLE];
+    	 int16_t acc[3] = {imu_values.acc_raw[X_AXIS], imu_values.acc_raw[Y_AXIS], imu_values.acc_raw[Z_AXIS]};
+    	 int16_t gyro = imu_values.gyro_raw[AXIS_OF_ANGLE];
 
     	 // Remove offset from measurements
 		 acc[X_AXIS] -= imu_values.acc_offset[X_AXIS];
@@ -113,31 +113,31 @@ void orientation_start(void)
 	// launch the thread (priority +1 for the integrator)
 	chThdCreateStatic(orientation_thd_wa, sizeof(orientation_thd_wa), NORMALPRIO+1, orientation_thd, NULL);
 }
-static void update_data(int32_t acceleration[], int32_t current_speed)
+static void update_data(int16_t acceleration[], int16_t current_speed)
 {
 	// angle from accelerometer (- because gyro and acc axes are not the same)
-	int32_t angle_acc_input = 0;
-	angle_acc_input = (int32_t) -RAD2mDEG(atan2(acceleration[AXIS_GRAVITY],-acceleration[AXIS_DOWN]));	// unit = milli-degrees
+	int16_t angle_acc_input = 0;
+	angle_acc_input = (int16_t) -RAD2cDEG(atan2(acceleration[AXIS_GRAVITY],-acceleration[AXIS_DOWN]));	// unit = centi-degrees
 	//temp_raw_angle_acc = angle_acc_input;
 
 	// apply low-pass filter to angle_acc
-	static int32_t angle_acc_f = 0; //previous acc angle
-	angle_acc_f = FILTER_FACTOR*angle_acc_f + (1-FILTER_FACTOR)*angle_acc_input;
+	static int16_t angle_acc_f = 0; //previous acc angle
+	angle_acc_f = (FILTER_FACTOR*angle_acc_f + (100-FILTER_FACTOR)*angle_acc_input)/100;
 
 
 	// angle from gyro
-	static int32_t angle_gyro = 0;	// unit = milli-degrees
-	int32_t angle_gyro_prev = angle_gyro;
-	angle_gyro += GYRO_RAW2mDPS(current_speed) * CORRECTION_GYRO * THREAD_PERIODE/1000;
+	static int16_t angle_gyro = 0;	// unit = centi-degrees
+	int16_t angle_gyro_prev = angle_gyro;
+	angle_gyro += GYRO_RAW2cDPS(current_speed) * CORRECTION_GYRO * THREAD_PERIODE/1000;
 	//temp_raw_angle_gyro = angle_gyro;
 
 	// apply high-pass complementary filter to angle_gyro
-	static int32_t angle_gyro_f = 0; //previous gyro angle, filtered
-	angle_gyro_f = FILTER_FACTOR*(angle_gyro_f+angle_gyro-angle_gyro_prev);
+	static int16_t angle_gyro_f = 0; //previous gyro angle, filtered
+	angle_gyro_f = FILTER_FACTOR*(angle_gyro_f+angle_gyro-angle_gyro_prev)/100;
 
 
 	// update angular speed
-	angular_speed = GYRO_RAW2mDPS(current_speed)*1e3; // unit = micro-degrees per second
+	angular_speed = GYRO_RAW2cDPS(current_speed); // unit = centi-degrees per second
 
 	// update angle
 	angle = angle_acc_f + angle_gyro_f;
