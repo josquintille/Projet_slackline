@@ -23,6 +23,7 @@
 #define Kd 100
 #define AWM_MAX  1000
 #define AWM_MIN  -AWM_MAX
+#define INTEG_THRESHOLD 0.02f
 #define MIN_SPEED 50
 
 #define STABLE_ANGLE 0.05 //[rad]
@@ -33,19 +34,21 @@
 #define MAX_TARGET_DISTANCE 130 // [mm]
 #define LEAN_SPEED 200
 #define LEAN_ANGLE 0.3f //[rad]
-#define FALL_SPEED 1.5 //[rad/s]
+#define FALL_SPEED .8//[rad/s]
+#define FALL_ANGLE .7//[rad]
 #define MOVING_SPEED 700
 
-enum MOVING_SEQUENCE {LEAN, LET_FALL, MOVE, DONE, NOT_DONE};
+typedef enum moving_sequence_t {LEAN, LET_FALL, MOVE, DONE, NOT_DONE} moving_sequence_t;
 
 // recovery parameters
 #define CRITICAL_ANGLE 		1//[rad]
 #define WAIT_UNTILL_DOWN 	500 //[ms]
 #define WAIT_UNTILL_UP 		200 // [ms]
-enum PUCK_SIDE {BACK=-1,NONE = 0, FRONT=1};
+enum puck_side_t {BACK=-1,NONE = 0, FRONT=1};
 
+#define SLEEP_TIME 1 //[ms]
 
-
+static control_mode_t control_mode = BALANCE;
 /*
  *	set the both motor at the same speed
  */
@@ -57,56 +60,65 @@ static void set_motor_speed(int speed);
  */
 static int regulator_speed(float input_angle, float input_speed);
 
+static void balance_mode(float input_angle, float input_speed);
+
+static void following_mode(float input_angle, float input_speed);
 /*
  * move the e-puck away or toward the target
  * in  : side Back or front, angle, angular speed of the e-pcuk
- * out : NOT_DONE if still moving, DONE if done
+ * out : side if still moving, NONE if done
  */
-static uint8_t move(int8_t side, float input_angle, float input_speed);
+static int8_t move(int8_t side, float input_angle, float input_speed);
 /*
- *
  * sequence if the e-puck is down, boost him to recover the straight position
- * input: BACK or FRONT, the side where the e-puck is down
  */
-static void recover(int8_t side);
+static void recover(void);
 static int8_t get_falling_side(float angle, float speed);
+
+
+/////////////////////////DEFINITION///////////////////////////////
+
 
 static THD_WORKING_AREA(motor_control_thd_wa, 512);
 static THD_FUNCTION(motor_control_thd, arg) {
      (void) arg;
      chRegSetThreadName(__FUNCTION__);
 
-     int motor_speed = 0;
      float angle = 0;
      float angular_speed = 0;
-	 int8_t falling_side = NONE;
-	 uint8_t is_moving_back = FALSE;
 
-	 uint8_t is_moving_front = FALSE;
+	 int8_t falling_side = NONE;
      while(1)
      {	// get angle from IMU (orientation.h)
 		angle = get_angle();
 		angular_speed = get_angular_speed();
 
-		volatile  int dist = get_target_distance();
-		if((get_target_distance() < MIN_TARGET_DISTANCE || is_moving_back) && !is_moving_front)
-			is_moving_back = move(BACK,angle,angular_speed)==DONE?FALSE:TRUE;
-		else if((get_target_distance() > MAX_TARGET_DISTANCE || is_moving_front))
-			is_moving_front = move(FRONT,angle,angular_speed)==DONE?FALSE:TRUE;
-		else
+
+		switch(control_mode)
 		{
-			motor_speed = regulator_speed(angle, angular_speed);
-			set_motor_speed(motor_speed);
+		case BALANCE:
+			balance_mode(angle,angular_speed);
+			break;
+		case FOLLOW_TARGET:
+			following_mode(angle,angular_speed);
+			break;
+		default:
+			balance_mode(angle,angular_speed);
 		}
 
 		// detect if the e-puck is down
 		falling_side = get_falling_side(angle, angular_speed);
 		if(falling_side != NONE)
-			recover(falling_side);
+			recover();
 
 		// let other thread work
-		chThdSleepMilliseconds(1);
+		chThdSleepMilliseconds(SLEEP_TIME);
      }
+}
+
+void set_control_mode(control_mode_t mode)
+{
+	control_mode = mode;
 }
 
 void motor_control_start(void)
@@ -137,31 +149,59 @@ static void set_motor_speed(int speed)
 	}
 }
 
+
 static int regulator_speed(float input_angle, float input_speed)
-{ // pid regulator
-	//integrator
-	static int integ = 0;
-	integ += Ki * input_angle;
+{	// pid regulator
+	// integrator
+	static float integ = 0;
+	if(fabs(input_angle) > INTEG_THRESHOLD)
+		integ += Ki*input_angle;
 	// AWM
 	if(integ > AWM_MAX)
 		integ = AWM_MAX;
 	else if (integ < AWM_MIN )
 		integ = AWM_MIN;
 
-	return Kp*input_angle + integ + input_speed*Kd;
+	return Kp*input_angle + integ + Kd*input_speed;
 }
 
-
-static uint8_t move(int8_t side, float input_angle, float input_speed)
+static void balance_mode(float input_angle, float input_speed)
 {
-	static enum MOVING_SEQUENCE state = DONE;
+	set_motor_speed(regulator_speed(input_angle, input_speed));
+}
+
+static void following_mode(float input_angle, float input_speed)
+{
+	static int8_t current_movement = NONE;
+
+	// update side (don't change side during sequence)
+	if(current_movement == NONE)
+	{
+		uint16_t distance = get_target_distance();
+
+		if(distance > MAX_TARGET_DISTANCE)
+			current_movement = FRONT;
+		else if (distance < MIN_TARGET_DISTANCE)
+			current_movement = BACK;
+	}
+
+	if(current_movement != NONE)
+		current_movement = move(current_movement,input_angle,input_speed);
+	else // idle: stay stable
+		balance_mode(input_angle,input_speed);
+}
+
+static int8_t move(int8_t side, float input_angle, float input_speed)
+{
+	static moving_sequence_t state = DONE;
 	switch(state)
 	{
 	case DONE:
 		state = LEAN;
-		set_motor_speed(-side*LEAN_SPEED);
+		//set_motor_speed(-side*LEAN_SPEED);
 		break;
 	case LEAN:
+		balance_mode(input_angle-side*LEAN_ANGLE, 0);
 		if(fabs(input_angle) >= LEAN_ANGLE )
 		{
 			state = LET_FALL;
@@ -179,14 +219,14 @@ static uint8_t move(int8_t side, float input_angle, float input_speed)
 		if(fabs(input_angle) <= STABLE_ANGLE )
 		{
 			state = DONE;
+			side = NONE;
 			set_motor_speed(0);
 		}
-		return DONE;
 	default:
-		return NOT_DONE;
+		state = DONE;
 	}
 
-	return NOT_DONE;
+	return side;
 }
 
 static int8_t get_falling_side(float angle, float speed)
@@ -197,10 +237,14 @@ static int8_t get_falling_side(float angle, float speed)
 		return SIDE(angle);
 }
 
-static void recover(int8_t side)
+static void recover(void)
 {
 	set_motor_speed(0);
 	chThdSleepMilliseconds(WAIT_UNTILL_DOWN);
-	set_motor_speed(side*MOTOR_SPEED_LIMIT);
-	chThdSleepMilliseconds(WAIT_UNTILL_UP);
+	float angle = 0;
+	while(fabs(angle = get_angle()) > STABLE_ANGLE)
+	{
+		balance_mode(angle,get_angular_speed());
+		chThdSleepMilliseconds(SLEEP_TIME);
+	}
 }
