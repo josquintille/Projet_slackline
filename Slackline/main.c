@@ -11,6 +11,7 @@
 #include <motors.h>
 #include <camera/po8030.h>
 #include <chprintf.h>
+#include <selector.h>
 
 #include "motor_control.h"
 
@@ -54,10 +55,29 @@ int main(void)
 	motor_control_start();
 	//process_image_start();
 
+	systime_t time;
     /* Infinite loop. */
     while (1) {
+    	time = chVTGetSystemTime();
+
+    	switch(get_selector()) {
+			case 0: // Mode balance
+				//code
+				chprintf((BaseSequentialStream *)&SD3, "Mode balance\n");
+				break;
+
+			case 1: // Mode obstacle
+				// code
+				chprintf((BaseSequentialStream *)&SD3, "Mode obstacle\n");
+				break;
+
+			default : // Does nothing
+				chprintf((BaseSequentialStream *)&SD3, "Mode default\n");
+				break;
+    	}
+
     	//waits 1 second
-        chThdSleepMilliseconds(1000);
+    	chThdSleepUntilWindowed(time, time + MS2ST(500));
     }
 }
 
