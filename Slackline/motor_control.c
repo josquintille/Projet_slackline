@@ -34,7 +34,7 @@
 #define MAX_TARGET_DISTANCE 130 // [mm]
 #define LEAN_SPEED 200
 #define LEAN_ANGLE 0.3f //[rad]
-#define FALL_SPEED .8//[rad/s]
+#define FALL_SPEED .5//[rad/s]
 #define FALL_ANGLE .7//[rad]
 #define MOVING_SPEED 700
 
@@ -48,7 +48,9 @@ enum puck_side_t {BACK=-1,NONE = 0, FRONT=1};
 
 #define SLEEP_TIME 1 //[ms]
 
-static control_mode_t control_mode = BALANCE;
+static control_mode_t control_mode = FOLLOW_TARGET;
+static _Bool reset_move_sequence = false;
+static _Bool reset_integrator = false;
 /*
  *	set the both motor at the same speed
  */
@@ -58,36 +60,36 @@ static void set_motor_speed(int speed);
  *  input: 	difference between angle and goal angle
  *  		as well as the angular speed (in rad/s)
  */
-static int regulator_speed(float input_angle, float input_speed);
+static int regulator_speed(float angle, float angular_speed);
 
-static void balance_mode(float input_angle, float input_speed);
+static void balance_mode(float angle, float angular_speed);
 
-static void following_mode(float input_angle, float input_speed);
+static void following_mode(float angle, float angular_speed);
 /*
  * move the e-puck away or toward the target
  * in  : side Back or front, angle, angular speed of the e-pcuk
  * out : side if still moving, NONE if done
  */
-static int8_t move(int8_t side, float input_angle, float input_speed);
+static int8_t move(int8_t side, float angle, float angular_speed);
 /*
  * sequence if the e-puck is down, boost him to recover the straight position
  */
 static void recover(void);
-static int8_t get_falling_side(float angle, float speed);
+static _Bool has_fallen(float angle, float speed);
 
 
 /////////////////////////DEFINITION///////////////////////////////
 
 
 static THD_WORKING_AREA(motor_control_thd_wa, 512);
-static THD_FUNCTION(motor_control_thd, arg) {
+static THD_FUNCTION(motor_control_thd, arg)
+{
      (void) arg;
      chRegSetThreadName(__FUNCTION__);
 
      float angle = 0;
      float angular_speed = 0;
 
-	 int8_t falling_side = NONE;
      while(1)
      {	// get angle from IMU (orientation.h)
 		angle = get_angle();
@@ -102,13 +104,12 @@ static THD_FUNCTION(motor_control_thd, arg) {
 		case FOLLOW_TARGET:
 			following_mode(angle,angular_speed);
 			break;
-		default:
+
 			balance_mode(angle,angular_speed);
 		}
 
-		// detect if the e-puck is down
-		falling_side = get_falling_side(angle, angular_speed);
-		if(falling_side != NONE)
+		// recover if the e-puck is down
+		if(has_fallen(angle, angular_speed))
 			recover();
 
 		// let other thread work
@@ -118,7 +119,12 @@ static THD_FUNCTION(motor_control_thd, arg) {
 
 void set_control_mode(control_mode_t mode)
 {
-	control_mode = mode;
+	if(control_mode != mode)
+	{
+		control_mode = mode;
+		reset_move_sequence = true;
+		reset_integrator = true;
+	}
 }
 
 void motor_control_start(void)
@@ -150,27 +156,32 @@ static void set_motor_speed(int speed)
 }
 
 
-static int regulator_speed(float input_angle, float input_speed)
+static int regulator_speed(float angle, float angular_speed)
 {	// pid regulator
 	// integrator
 	static float integ = 0;
-	if(fabs(input_angle) > INTEG_THRESHOLD)
-		integ += Ki*input_angle;
+	if(reset_integrator)
+	{
+		integ = 0;
+		reset_integrator = false;
+	}
+	if(fabs(angle) > INTEG_THRESHOLD)
+		integ += Ki*angle;
 	// AWM
 	if(integ > AWM_MAX)
 		integ = AWM_MAX;
 	else if (integ < AWM_MIN )
 		integ = AWM_MIN;
 
-	return Kp*input_angle + integ + Kd*input_speed;
+	return Kp*angle + integ + Kd*angular_speed;
 }
 
-static void balance_mode(float input_angle, float input_speed)
+static void balance_mode(float angle, float angular_speed)
 {
-	set_motor_speed(regulator_speed(input_angle, input_speed));
+	set_motor_speed(regulator_speed(angle, angular_speed));
 }
 
-static void following_mode(float input_angle, float input_speed)
+static void following_mode(float angle, float angular_speed)
 {
 	static int8_t current_movement = NONE;
 
@@ -186,42 +197,50 @@ static void following_mode(float input_angle, float input_speed)
 	}
 
 	if(current_movement != NONE)
-		current_movement = move(current_movement,input_angle,input_speed);
+		current_movement = move(current_movement,angle,angular_speed);
 	else // idle: stay stable
-		balance_mode(input_angle,input_speed);
+		balance_mode(angle,angular_speed);
 }
 
-static int8_t move(int8_t side, float input_angle, float input_speed)
+static int8_t move(int8_t side, float angle, float angular_speed)
 {
 	static moving_sequence_t state = DONE;
+	if(reset_move_sequence)
+	{
+		state = DONE;
+		reset_move_sequence = false;
+	}
 	switch(state)
 	{
 	case DONE:
 		state = LEAN;
-		//set_motor_speed(-side*LEAN_SPEED);
+		set_motor_speed(-side*LEAN_SPEED);
+		//reset_integrator = true;
 		break;
 	case LEAN:
-		balance_mode(input_angle-side*LEAN_ANGLE, 0);
-		if(fabs(input_angle) >= LEAN_ANGLE )
+		//balance_mode(angle-side*LEAN_ANGLE, 0);
+		if(fabs(angle) >= LEAN_ANGLE )
 		{
 			state = LET_FALL;
+			reset_integrator = true;
 			set_motor_speed(0);
 		}
 		break;
 	case LET_FALL:
-		if(fabs(input_speed) >= FALL_SPEED )
+		if(fabs(angular_speed) >= FALL_SPEED )
 		{
 			state = MOVE;
 			set_motor_speed(side*MOVING_SPEED);
 		}
 		break;
 	case MOVE:
-		if(fabs(input_angle) <= STABLE_ANGLE )
+		if(fabs(angle) <= STABLE_ANGLE )
 		{
 			state = DONE;
 			side = NONE;
 			set_motor_speed(0);
 		}
+		break;
 	default:
 		state = DONE;
 	}
@@ -229,12 +248,12 @@ static int8_t move(int8_t side, float input_angle, float input_speed)
 	return side;
 }
 
-static int8_t get_falling_side(float angle, float speed)
+static _Bool has_fallen(float angle, float speed)
 {
 	if(fabs(angle) < CRITICAL_ANGLE || (SIDE(angle) != SIDE(speed)))
-		return NONE;
+		return true;
 	else
-		return SIDE(angle);
+		return false;
 }
 
 static void recover(void)
@@ -242,9 +261,12 @@ static void recover(void)
 	set_motor_speed(0);
 	chThdSleepMilliseconds(WAIT_UNTILL_DOWN);
 	float angle = 0;
+	reset_integrator = true;
 	while(fabs(angle = get_angle()) > STABLE_ANGLE)
 	{
 		balance_mode(angle,get_angular_speed());
 		chThdSleepMilliseconds(SLEEP_TIME);
 	}
+	// Avoid overshoot
+	reset_integrator = true;
 }
