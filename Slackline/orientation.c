@@ -100,7 +100,7 @@ static void update_data(float acceleration[], float current_speed)
 
 
 	// apply moving average filter to current speed
-	static float buff_angular_speeds[NB_SAMPLES_GYRO-1] = {0};
+	static float buff_angular_speeds[NB_SAMPLES_GYRO-1] = {0}; //-1 <-- current speed is not in buff
 	static uint8_t buff_head = 0;
 	// compute mean value
 	angular_speed = current_speed;
@@ -108,7 +108,7 @@ static void update_data(float acceleration[], float current_speed)
 	{
 		angular_speed += buff_angular_speeds[i];
 	}
-	angular_speed /= NB_SAMPLES_GYRO * MS2S(THREAD_PERIOD);
+	angular_speed /= NB_SAMPLES_GYRO;
 	// update buffer
 	buff_angular_speeds[buff_head] = current_speed;
 	buff_head = (buff_head >= NB_SAMPLES_GYRO-2) ? 0 : buff_head+1;
