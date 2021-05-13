@@ -22,7 +22,7 @@
 
 
 #define AXIS_OF_ANGLE 	X_AXIS
-#define TIM2SEC(tim) 	tim/1e6
+#define MS2S(tim) 	tim/1e3
 
 #define AXIS_GRAVITY 	Y_AXIS
 #define AXIS_DOWN		Z_AXIS
@@ -40,8 +40,6 @@ CONDVAR_DECL(bus_condvar);
 
 static float angle = 0;
 static float angular_speed = 0;
-
-static void timer11_start(void);
 
 static void update_data(float acceleration[], float current_speed);
 
@@ -68,8 +66,6 @@ static THD_FUNCTION(orientation_thd, arg)
 }
 void orientation_start(void)
 {
-	// timer
-	timer11_start();
 	// setup IMU
 	imu_start();
 	messagebus_init(&bus, &bus_lock, &bus_condvar);
@@ -89,41 +85,22 @@ static void update_data(float acceleration[], float current_speed)
 	static float angle_acc_f = 0; //previous acc angle
 	angle_acc_f = FILTER_FACTOR*angle_acc_f + (1-FILTER_FACTOR)*angle_acc_input;
 
-	// angle from gyro (timer used to calculate dt)
+
+	// angle from gyro
 	static float angle_gyro = 0;
 	float angle_gyro_prev = angle_gyro;
-	chSysLock();
-	uint16_t time = GPTD11.tim->CNT;
-	GPTD11.tim->CNT = 0;
-	angle_gyro += current_speed * TIM2SEC(time);
-	chSysUnlock();
-
+	angle_gyro += current_speed * MS2S(THREAD_PERIODE);
 
 	// apply high-pass complementary filter to angle_gyro
 	static float angle_gyro_f = 0; //previous gyro angle, filtered
 	angle_gyro_f = FILTER_FACTOR*(angle_gyro_f+angle_gyro-angle_gyro_prev);
+
 
 	// update angular speed
 	angular_speed = current_speed;
 
 	// update angle
 	angle = angle_acc_f + angle_gyro_f;
-}
-static void timer11_start(void)
-{
-    //General Purpose Timer configuration
-    //timer 11 is a 16 bit timer so we can measure time
-    //to about 65ms with a 1Mhz counter
-    static const GPTConfig gpt11cfg = {
-        1000000,        /* 1MHz timer clock in order to measure uS.*/
-        NULL,           /* Timer callback.*/
-        0,
-        0
-    };
-
-    gptStart(&GPTD11, &gpt11cfg);
-    //let the timer count to max value
-    gptStartContinuous(&GPTD11, 0xFFFF);
 }
 
 float get_angle(void)
