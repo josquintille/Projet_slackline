@@ -21,17 +21,20 @@
 #include <math.h>
 
 
-#define AXIS_OF_ANGLE 	X_AXIS
+
 #define MS2S(tim) 	tim/1e3
 
+#define AXIS_OF_ANGLE 	X_AXIS
 #define AXIS_GRAVITY 	Y_AXIS
 #define AXIS_DOWN		Z_AXIS
 
 #define OMEGA_N			0.1// cut frequency of the complementary filters
-#define FILTER_FACTOR	0.99// exp(-OMEGA_N*THREAD_PERIODE)
+#define FILTER_FACTOR	0.99// exp(-OMEGA_N*THREAD_PERIOD)
+
+#define NB_SAMPLES_GYRO 10 //for the moving average filter
 
 
-#define THREAD_PERIODE 1 //[ms]
+#define THREAD_PERIOD	4 //[ms]
 // Bus to communicate with the IMU
 messagebus_t bus;
 MUTEX_DECL(bus_lock);
@@ -61,7 +64,7 @@ static THD_FUNCTION(orientation_thd, arg)
     	 update_data(imu_values.acceleration, imu_values.gyro_rate[AXIS_OF_ANGLE]);
 
 		  // go to sleep
-		 chThdSleepUntilWindowed(time, time + MS2ST(THREAD_PERIODE));
+		 chThdSleepUntilWindowed(time, time + MS2ST(THREAD_PERIOD));
      }
 }
 void orientation_start(void)
@@ -89,25 +92,37 @@ static void update_data(float acceleration[], float current_speed)
 	// angle from gyro
 	static float angle_gyro = 0;
 	float angle_gyro_prev = angle_gyro;
-	angle_gyro += current_speed * MS2S(THREAD_PERIODE);
+	angle_gyro += current_speed * MS2S(THREAD_PERIOD);
 
 	// apply high-pass complementary filter to angle_gyro
 	static float angle_gyro_f = 0; //previous gyro angle, filtered
 	angle_gyro_f = FILTER_FACTOR*(angle_gyro_f+angle_gyro-angle_gyro_prev);
 
 
-	// update angular speed
+	// apply moving average filter to current speed
+	static float buff_angular_speeds[NB_SAMPLES_GYRO-1] = {0};
+	static uint8_t buff_head = 0;
+	// compute mean value
 	angular_speed = current_speed;
+	for(uint8_t i = 0; i <= NB_SAMPLES_GYRO-2; i++)
+	{
+		angular_speed += buff_angular_speeds[i];
+	}
+	angular_speed /= NB_SAMPLES_GYRO * MS2S(THREAD_PERIOD);
+	// update buffer
+	buff_angular_speeds[buff_head] = current_speed;
+	buff_head = (buff_head >= NB_SAMPLES_GYRO-2) ? 0 : buff_head+1;
+
 
 	// update angle
 	angle = angle_acc_f + angle_gyro_f;
 }
 
+
 float get_angle(void)
 {
 	return angle;
 }
-
 
 float get_angular_speed(void)
 {
