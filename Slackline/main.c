@@ -15,6 +15,9 @@
 
 #include "motor_control.h"
 
+#define MODE_BALANCE 0
+#define MODE_OBSTACLE 1
+
 void SendUint8ToComputer(uint8_t* data, uint16_t size) 
 {
 	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)"START", 5);
@@ -61,17 +64,17 @@ int main(void)
     	time = chVTGetSystemTime();
 
     	switch(get_selector()) {
-			case 0: // Mode balance
+			case MODE_BALANCE:
 				//code
 				chprintf((BaseSequentialStream *)&SD3, "Mode balance\n");
 				break;
 
-			case 1: // Mode obstacle
+			case MODE_OBSTACLE:
 				// code
 				chprintf((BaseSequentialStream *)&SD3, "Mode obstacle\n");
 				break;
 
-			default : // Does nothing
+			default : // mode balance
 				chprintf((BaseSequentialStream *)&SD3, "Mode default\n");
 				break;
     	}
