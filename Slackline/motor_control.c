@@ -18,12 +18,13 @@
 #define SIDE(x)  (signbit(x) ?  BACK : FRONT)
 
 // regulator parameters
-#define Ki	40
+#define Ki 40
 #define Kp 2700
 #define Kd 100
 #define AWM_MAX  1000
 #define AWM_MIN  -AWM_MAX
-#define INTEG_THRESHOLD 0.02f
+#define INTEG_THRESHOLD STABLE_ANGLE
+#define DERIV_THRESHOLD 2*STABLE_SPEED
 #define MIN_SPEED 50
 
 #define STABLE_ANGLE 0.05 //[rad]
@@ -34,7 +35,7 @@
 #define MAX_TARGET_DISTANCE 130 // [mm]
 #define LEAN_SPEED 200
 #define LEAN_ANGLE 0.3f //[rad]
-#define FALL_SPEED .5//[rad/s]
+#define FALL_SPEED .2//[rad/s]
 #define FALL_ANGLE .7//[rad]
 #define MOVING_SPEED 700
 
@@ -42,13 +43,13 @@ typedef enum moving_sequence_t {LEAN, LET_FALL, MOVE, DONE, NOT_DONE} moving_seq
 
 // recovery parameters
 #define CRITICAL_ANGLE 		1//[rad]
-#define WAIT_UNTILL_DOWN 	500 //[ms]
+#define WAIT_UNTILL_DOWN 	1000 //[ms]
 #define WAIT_UNTILL_UP 		200 // [ms]
 enum puck_side_t {BACK=-1,NONE = 0, FRONT=1};
 
 #define SLEEP_TIME 1 //[ms]
 
-static control_mode_t control_mode = FOLLOW_TARGET;
+static control_mode_t control_mode = BALANCE;
 static _Bool reset_move_sequence = false;
 static _Bool reset_integrator = false;
 /*
@@ -61,7 +62,7 @@ static void set_motor_speed(int speed);
  *  		as well as the angular speed (in rad/s)
  */
 static int regulator_speed(float angle, float angular_speed);
-
+static _Bool is_stable(float angle, float angular_speed);
 static void balance_mode(float angle, float angular_speed);
 
 static void following_mode(float angle, float angular_speed);
@@ -156,10 +157,11 @@ static void set_motor_speed(int speed)
 }
 
 
+
 static int regulator_speed(float angle, float angular_speed)
 {	// pid regulator
 	// integrator
-	static float integ = 0;
+	static int integ = 0;
 	if(reset_integrator)
 	{
 		integ = 0;
@@ -172,8 +174,20 @@ static int regulator_speed(float angle, float angular_speed)
 		integ = AWM_MAX;
 	else if (integ < AWM_MIN )
 		integ = AWM_MIN;
+	float deriv = Kd*angular_speed;
+	//if(fabs(angle) < DERIV_THRESHOLD)
+	//	deriv = 0;
+	//chprintf((BaseSequentialStream *)&SD3, "%.1f, %.1f, %.1f;\n",Kp*angle,integ, deriv);
+	return Kp*angle + integ + deriv;
+}
 
-	return Kp*angle + integ + Kd*angular_speed;
+
+static _Bool is_stable(float angle, float angular_speed)
+{
+	if(fabs(angle)<STABLE_ANGLE && fabs(angular_speed)<STABLE_SPEED)
+		return true;
+	else
+		return false;
 }
 
 static void balance_mode(float angle, float angular_speed)
@@ -186,7 +200,7 @@ static void following_mode(float angle, float angular_speed)
 	static int8_t current_movement = NONE;
 
 	// update side (don't change side during sequence)
-	if(current_movement == NONE)
+	if(current_movement == NONE && is_stable(angle,angular_speed))
 	{
 		uint16_t distance = get_target_distance();
 
@@ -201,6 +215,9 @@ static void following_mode(float angle, float angular_speed)
 	else // idle: stay stable
 		balance_mode(angle,angular_speed);
 }
+
+
+
 
 static int8_t move(int8_t side, float angle, float angular_speed)
 {
@@ -230,10 +247,11 @@ static int8_t move(int8_t side, float angle, float angular_speed)
 		if(fabs(angular_speed) >= FALL_SPEED )
 		{
 			state = MOVE;
-			set_motor_speed(side*MOVING_SPEED);
+			//set_motor_speed(side*MOVING_SPEED);
 		}
 		break;
 	case MOVE:
+		balance_mode(angle, angular_speed);
 		if(fabs(angle) <= STABLE_ANGLE )
 		{
 			state = DONE;
@@ -251,22 +269,36 @@ static int8_t move(int8_t side, float angle, float angular_speed)
 static _Bool has_fallen(float angle, float speed)
 {
 	if(fabs(angle) < CRITICAL_ANGLE || (SIDE(angle) != SIDE(speed)))
-		return true;
-	else
 		return false;
+	else
+		return true;
 }
 
 static void recover(void)
 {
 	set_motor_speed(0);
 	chThdSleepMilliseconds(WAIT_UNTILL_DOWN);
-	float angle = 0;
-	reset_integrator = true;
-	while(fabs(angle = get_angle()) > STABLE_ANGLE)
+	float angle = 0, angular_speed = 0;
+	_Bool fail_to_recover = false;
+	//reset_integrator = true;
+	angle = get_angle();
+	angular_speed = get_angular_speed();
+
+	while(fabs(angle) > STABLE_ANGLE)
 	{
-		balance_mode(angle,get_angular_speed());
+		angle = get_angle();
+		angular_speed = get_angular_speed();
+
+		// fail to recover : wait to be adjusted manually
+		if( SIDE(angle)==SIDE(angular_speed) && !(fabs(angular_speed) < STABLE_ANGLE) )
+		{
+			fail_to_recover = true;
+			set_motor_speed(0);
+		}
+		if(!fail_to_recover)
+			set_motor_speed(SIDE(angle)*MOTOR_SPEED_LIMIT);
 		chThdSleepMilliseconds(SLEEP_TIME);
 	}
 	// Avoid overshoot
-	reset_integrator = true;
+	//reset_integrator = true;
 }
