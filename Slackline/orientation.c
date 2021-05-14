@@ -116,7 +116,7 @@ static void update_data(float acceleration[], float current_speed)
 	angular_speed = mean_speed / NB_SAMPLES_GYRO;
 	// update buffer
 	buff_angular_speeds[buff_head] = current_speed;
-	buff_head = (buff_head+1 > BUFF_SIZE) ? 0 : buff_head+1;
+	buff_head = (buff_head+1 >= BUFF_SIZE) ? 0 : buff_head+1;
 }
 
 
