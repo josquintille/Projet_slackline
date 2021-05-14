@@ -32,6 +32,7 @@
 #define FILTER_FACTOR	0.99// exp(-OMEGA_N*THREAD_PERIOD)
 
 #define NB_SAMPLES_GYRO 10 //for the moving average filter
+#define BUFF_SIZE		NB_SAMPLES_GYRO-1
 
 
 #define THREAD_PERIOD	4 //[ms]
@@ -99,23 +100,23 @@ static void update_data(float acceleration[], float current_speed)
 	angle_gyro_f = FILTER_FACTOR*(angle_gyro_f+angle_gyro-angle_gyro_prev);
 
 
-	// apply moving average filter to current speed
-	static float buff_angular_speeds[NB_SAMPLES_GYRO-1] = {0}; //-1 <-- current speed is not in buff
-	static uint8_t buff_head = 0;
-	// compute mean value
-	angular_speed = current_speed;
-	for(uint8_t i = 0; i < NB_SAMPLES_GYRO-1; i++)
-	{
-		angular_speed += buff_angular_speeds[i];
-	}
-	angular_speed /= NB_SAMPLES_GYRO;
-	// update buffer
-	buff_angular_speeds[buff_head] = current_speed;
-	buff_head = (buff_head+1 > NB_SAMPLES_GYRO-1) ? 0 : buff_head+1;
-
-
 	// update angle
 	angle = angle_acc_f + angle_gyro_f;
+
+
+	// apply moving average filter to current speed
+	static float buff_angular_speeds[BUFF_SIZE] = {0};
+	static uint8_t buff_head = 0;
+	// compute mean value
+	float mean_speed = current_speed;
+	for(uint8_t i = 0; i < BUFF_SIZE; i++)
+	{
+		mean_speed += buff_angular_speeds[i];
+	}
+	angular_speed = mean_speed / NB_SAMPLES_GYRO;
+	// update buffer
+	buff_angular_speeds[buff_head] = current_speed;
+	buff_head = (buff_head+1 > BUFF_SIZE) ? 0 : buff_head+1;
 }
 
 
