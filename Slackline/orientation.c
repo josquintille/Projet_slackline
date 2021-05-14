@@ -71,8 +71,8 @@ static THD_FUNCTION(orientation_thd, arg)
 void orientation_start(void)
 {
 	// setup IMU
-	imu_start();
 	messagebus_init(&bus, &bus_lock, &bus_condvar);
+	imu_start();
 	calibrate_acc();
 	calibrate_gyro();
 
