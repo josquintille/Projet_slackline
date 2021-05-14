@@ -28,8 +28,8 @@
 #define AXIS_GRAVITY 	Y_AXIS
 #define AXIS_DOWN		Z_AXIS
 
-#define OMEGA_N			0.1// cut frequency of the complementary filters
-#define FILTER_FACTOR	0.99// exp(-OMEGA_N*THREAD_PERIOD)
+#define OMEGA_N			15.7080// cut frequency of the complementary filters
+#define FILTER_FACTOR	0.9391// exp(-OMEGA_N*THREAD_PERIOD)
 
 #define NB_SAMPLES_GYRO 10 //for the moving average filter
 #define BUFF_SIZE		NB_SAMPLES_GYRO-1
