@@ -92,7 +92,7 @@ static void update_data(float acceleration[], float current_speed)
 
 	// apply high-pass complementary filter and integrator to angle_gyro
 	static float angle_gyro_f = 0; //previous gyro angle, filtered
-	angle_gyro_f = FILTER_FACTOR*angle_gyro_f + FILTER_FACTOR*MS2S(THREAD_PERIOD)*current_speed;
+	angle_gyro_f = FILTER_FACTOR*angle_gyro_f + (1-FILTER_FACTOR)*MS2S(THREAD_PERIOD)*current_speed;
 
 
 	// update angle
