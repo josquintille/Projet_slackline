@@ -23,8 +23,8 @@
 #define Kd 100
 #define AWM_MAX  1000
 #define AWM_MIN  -AWM_MAX
-#define INTEG_THRESHOLD STABLE_ANGLE
-#define DERIV_THRESHOLD 2*STABLE_SPEED
+#define INTEG_THRESHOLD 0.025
+#define DERIV_THRESHOLD 4*STABLE_SPEED
 #define MIN_SPEED 50
 
 #define STABLE_ANGLE 0.05 //[rad]
@@ -167,17 +167,17 @@ static int regulator_speed(float angle, float angular_speed)
 		integ = 0;
 		reset_integrator = false;
 	}
-	if(fabs(angle) > INTEG_THRESHOLD)
+	//if(fabs(angle) > INTEG_THRESHOLD)
 		integ += Ki*angle;
 	// AWM
 	if(integ > AWM_MAX)
 		integ = AWM_MAX;
 	else if (integ < AWM_MIN )
 		integ = AWM_MIN;
-	float deriv = Kd*angular_speed;
-	//if(fabs(angle) < DERIV_THRESHOLD)
-	//	deriv = 0;
-	//chprintf((BaseSequentialStream *)&SD3, "%.1f, %.1f, %.1f;\n",Kp*angle,integ, deriv);
+	float deriv = 0;
+	//if(fabs(angular_speed) > DERIV_THRESHOLD)
+		deriv = Kd*(angular_speed);//-SIDE(angular_speed)*DERIV_THRESHOLD);
+	chprintf((BaseSequentialStream *)&SD3, "%.1f, %d, %.1f;\n",Kp*angle,integ, deriv);
 	return Kp*angle + integ + deriv;
 }
 

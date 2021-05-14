@@ -57,19 +57,19 @@ int main(void)
     	if(current_mode != get_selector())
     	{
     		current_mode = get_selector();
-			switch(current_mode)
+			switch (current_mode)
 			{
-				case MODE_BALANCE:
-					set_control_mode(BALANCE);
-					break;
+			case MODE_BALANCE:
+				set_control_mode(BALANCE);
+				break;
 
-				case MODE_OBSTACLE:
-					set_control_mode(FOLLOW_TARGET);
-					break;
+			case MODE_OBSTACLE:
+				set_control_mode(FOLLOW_TARGET);
+				break;
 
-				default : // mode balance
-					set_control_mode(BALANCE);
-					break;
+			default: // mode balance
+				set_control_mode(BALANCE);
+				break;
 			}
     	}
 
