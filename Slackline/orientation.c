@@ -90,14 +90,9 @@ static void update_data(float acceleration[], float current_speed)
 	angle_acc_f = FILTER_FACTOR*angle_acc_f + (1-FILTER_FACTOR)*angle_acc_input;
 
 
-	// angle from gyro
-	static float angle_gyro = 0;
-	float angle_gyro_prev = angle_gyro;
-	angle_gyro += current_speed * MS2S(THREAD_PERIOD);
-
-	// apply high-pass complementary filter to angle_gyro
+	// apply high-pass complementary filter and integrator to angle_gyro
 	static float angle_gyro_f = 0; //previous gyro angle, filtered
-	angle_gyro_f = FILTER_FACTOR*(angle_gyro_f+angle_gyro-angle_gyro_prev);
+	angle_gyro_f = FILTER_FACTOR*angle_gyro_f + FILTER_FACTOR*MS2S(THREAD_PERIOD)*current_speed;
 
 
 	// update angle
