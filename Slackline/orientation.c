@@ -104,14 +104,14 @@ static void update_data(float acceleration[], float current_speed)
 	static uint8_t buff_head = 0;
 	// compute mean value
 	angular_speed = current_speed;
-	for(uint8_t i = 0; i <= NB_SAMPLES_GYRO-2; i++)
+	for(uint8_t i = 0; i < NB_SAMPLES_GYRO-1; i++)
 	{
 		angular_speed += buff_angular_speeds[i];
 	}
 	angular_speed /= NB_SAMPLES_GYRO;
 	// update buffer
 	buff_angular_speeds[buff_head] = current_speed;
-	buff_head = (buff_head >= NB_SAMPLES_GYRO-2) ? 0 : buff_head+1;
+	buff_head = (buff_head+1 > NB_SAMPLES_GYRO-1) ? 0 : buff_head+1;
 
 
 	// update angle
