@@ -52,37 +52,28 @@ int main(void)
     /* Infinite loop. */
     while (1) {
     	time = chVTGetSystemTime();
-    	static uint8_t prev_mode = 0;
+    	static uint8_t current_mode = 0;
 
-    	switch(get_selector()) {
-			case MODE_BALANCE:
-				//code
-				if(prev_mode != MODE_BALANCE)
-				{
-					chprintf((BaseSequentialStream *)&SD3, "Mode balance\n");
-					prev_mode = MODE_BALANCE;
-				}
-				break;
+    	if(current_mode != get_selector())
+    	{
+    		current_mode = get_selector();
+			switch(current_mode)
+			{
+				case MODE_BALANCE:
+					set_control_mode(BALANCE);
+					break;
 
-			case MODE_OBSTACLE:
-				// code
-				if(prev_mode != MODE_OBSTACLE)
-				{
-					chprintf((BaseSequentialStream *)&SD3, "Mode obstacle\n");
-					prev_mode = MODE_OBSTACLE;
-				}
-				break;
+				case MODE_OBSTACLE:
+					set_control_mode(FOLLOW_TARGET);
+					break;
 
-			default : // mode balance
-				if(prev_mode != MODE_BALANCE)
-				{
-					chprintf((BaseSequentialStream *)&SD3, "Mode default (balance)\n");
-					prev_mode = MODE_BALANCE;
-				}
-				break;
+				default : // mode balance
+					set_control_mode(BALANCE);
+					break;
+			}
     	}
 
-    	//waits 1 second
+    	//waits 0.5 second
     	chThdSleepUntilWindowed(time, time + MS2ST(500));
     }
 }
