@@ -17,8 +17,9 @@
 
 #include "motor_control.h"
 
-#define MODE_BALANCE 0
-#define MODE_OBSTACLE 1
+#define MODE_BALANCE	1
+#define MODE_OBSTACLE	0
+#define ILLEGAL_MODE	16
 
 #define LED_ON	1
 #define LED_OFF	0
@@ -73,7 +74,7 @@ int main(void)
     chSysInit();
     mpu_init();
 
-    //start the spi communication (for rgb leds)
+    //start the spi communication (for RGB leds)
     spi_comm_start();
     //starts the serial communication
     serial_start();
@@ -89,7 +90,7 @@ int main(void)
     /* Infinite loop. */
     while (1) {
     	time = chVTGetSystemTime();
-    	static uint8_t current_mode = 0;
+    	static uint8_t current_mode = ILLEGAL_MODE;
 
     	if(current_mode != get_selector())
     	{
@@ -97,12 +98,12 @@ int main(void)
 			display_led(current_mode);
 			switch(current_mode)
 			{
-				case MODE_BALANCE:
-					set_control_mode(BALANCE);
-					break;
-
 				case MODE_OBSTACLE:
 					set_control_mode(FOLLOW_TARGET);
+					break;
+
+				case MODE_BALANCE:
+					set_control_mode(BALANCE);
 					break;
 
 				default : // mode balance
@@ -111,8 +112,8 @@ int main(void)
 			}
     	}
 
-    	//waits 0.5 second
-    	chThdSleepUntilWindowed(time, time + MS2ST(500));
+    	//waits 0.05 second
+    	chThdSleepUntilWindowed(time, time + MS2ST(50));
     }
 }
 
