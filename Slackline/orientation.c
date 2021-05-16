@@ -28,10 +28,11 @@
 #define AXIS_GRAVITY 	Y_AXIS
 #define AXIS_DOWN		Z_AXIS
 
-#define OMEGA_N			0.1// cut frequency of the complementary filters
-#define FILTER_FACTOR	0.99// exp(-OMEGA_N*THREAD_PERIOD)
+#define CUTOFF_FREQ_FILTER	2.5133// [rad/s]
+#define COMP_FILTER_FACTOR	0.99// exp(-CUTOFF_FREQ_FILTER*THREAD_PERIOD)
+#define SPEED_FILTER_FACTOR	0.96
 
-#define NB_SAMPLES_GYRO 10 //for the moving average filter
+#define NB_SAMPLES_GYRO 50 //for the moving average filter
 #define BUFF_SIZE		NB_SAMPLES_GYRO-1
 
 
@@ -87,24 +88,21 @@ static void update_data(float acceleration[], float current_speed)
 
 	// apply low-pass filter to angle_acc
 	static float angle_acc_f = 0; //previous acc angle
-	angle_acc_f = FILTER_FACTOR*angle_acc_f + (1-FILTER_FACTOR)*angle_acc_input;
+	angle_acc_f = COMP_FILTER_FACTOR*angle_acc_f + (1-COMP_FILTER_FACTOR)*angle_acc_input;
 
 
-	// angle from gyro
-	static float angle_gyro = 0;
-	float angle_gyro_prev = angle_gyro;
-	angle_gyro += current_speed * MS2S(THREAD_PERIOD);
-
-	// apply high-pass complementary filter to angle_gyro
+	// apply high-pass complementary filter and integrator to angle_gyro
 	static float angle_gyro_f = 0; //previous gyro angle, filtered
-	angle_gyro_f = FILTER_FACTOR*(angle_gyro_f+angle_gyro-angle_gyro_prev);
+	angle_gyro_f = COMP_FILTER_FACTOR*angle_gyro_f + (1-COMP_FILTER_FACTOR)/CUTOFF_FREQ_FILTER*current_speed;
 
 
 	// update angle
 	angle = angle_acc_f + angle_gyro_f;
+	//chprintf((BaseSequentialStream *)&SD3, "%.4f, %.4f, %.4f;\n", angle_acc_f, angle_gyro_f, angle);
 
 
 	// apply moving average filter to current speed
+	/*
 	static float buff_angular_speeds[BUFF_SIZE] = {0};
 	static uint8_t buff_head = 0;
 	// compute mean value
@@ -117,6 +115,8 @@ static void update_data(float acceleration[], float current_speed)
 	// update buffer
 	buff_angular_speeds[buff_head] = current_speed;
 	buff_head = (buff_head+1 >= BUFF_SIZE) ? 0 : buff_head+1;
+	*/
+	angular_speed = SPEED_FILTER_FACTOR*angular_speed + (1-SPEED_FILTER_FACTOR)*current_speed;
 }
 
 
