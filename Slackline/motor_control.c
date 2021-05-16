@@ -44,7 +44,7 @@ typedef enum moving_sequence_t {LEAN, LET_FALL, MOVE, DONE, NOT_DONE} moving_seq
 // recovery parameters
 #define CRITICAL_ANGLE 		1//[rad]
 #define WAIT_UNTILL_DOWN 	1000 //[ms]
-#define WAIT_UNTILL_UP 		200 // [ms]
+#define WAIT_SPEED_MAX		100 //[ms]
 enum puck_side_t {BACK=-1,NONE = 0, FRONT=1};
 
 #define SLEEP_TIME 1 //[ms]
@@ -159,7 +159,8 @@ static void set_motor_speed(int speed)
 
 
 static int regulator_speed(float angle, float angular_speed)
-{	// pid regulator
+{
+	// pid regulator
 	// integrator
 	static int integ = 0;
 	if(reset_integrator)
@@ -200,14 +201,20 @@ static void following_mode(float angle, float angular_speed)
 	static int8_t current_movement = NONE;
 
 	// update side (don't change side during sequence)
-	if(current_movement == NONE && is_stable(angle,angular_speed))
+	if(current_movement == NONE)
 	{
 		uint16_t distance = get_target_distance();
 
 		if(distance > MAX_TARGET_DISTANCE)
-			current_movement = FRONT;
+		{
+			if(SIDE(angular_speed) != BACK && SIDE(angle) != BACK)
+				current_movement = FRONT;
+		}
 		else if (distance < MIN_TARGET_DISTANCE)
+		{
+			if(SIDE(angular_speed) != FRONT && SIDE(angle) != FRONT)
 			current_movement = BACK;
+		}
 	}
 
 	if(current_movement != NONE)
@@ -278,9 +285,15 @@ static void recover(void)
 {
 	set_motor_speed(0);
 	chThdSleepMilliseconds(WAIT_UNTILL_DOWN);
+	set_motor_speed(-SIDE(get_angle())*MOTOR_SPEED_LIMIT);
+	chThdSleepMilliseconds(WAIT_SPEED_MAX);
+
 	float angle = 0, angular_speed = 0;
 	_Bool fail_to_recover = false;
-	//reset_integrator = true;
+
+	reset_integrator = true;
+
+
 	angle = get_angle();
 	angular_speed = get_angular_speed();
 
