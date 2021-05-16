@@ -37,9 +37,10 @@
 #define LEAN_ANGLE 0.3f //[rad]
 #define FALL_SPEED .2//[rad/s]
 #define FALL_ANGLE .7//[rad]
+#define MOVING_ACCELERATION 100000*SLEEP_TIME/1000
 #define MOVING_SPEED 700
 
-typedef enum moving_sequence_t {LEAN, LET_FALL, MOVE, DONE, NOT_DONE} moving_sequence_t;
+typedef enum moving_sequence_t {LEAN, LET_FALL, ACCELERATE, MOVE, DONE, NOT_DONE} moving_sequence_t;
 
 // recovery parameters
 #define CRITICAL_ANGLE 		1//[rad]
@@ -204,15 +205,14 @@ static void following_mode(float angle, float angular_speed)
 	if(current_movement == NONE)
 	{
 		uint16_t distance = get_target_distance();
-
 		if(distance > MAX_TARGET_DISTANCE)
 		{
-			if(SIDE(angular_speed) != BACK && SIDE(angle) != BACK)
+			if(SIDE(angle) != BACK)
 				current_movement = FRONT;
 		}
 		else if (distance < MIN_TARGET_DISTANCE)
 		{
-			if(SIDE(angular_speed) != FRONT && SIDE(angle) != FRONT)
+			if(SIDE(angle) != FRONT)
 			current_movement = BACK;
 		}
 	}
@@ -229,6 +229,7 @@ static void following_mode(float angle, float angular_speed)
 static int8_t move(int8_t side, float angle, float angular_speed)
 {
 	static moving_sequence_t state = DONE;
+	static int acc_speed = 0;
 	if(reset_move_sequence)
 	{
 		state = DONE;
@@ -238,23 +239,36 @@ static int8_t move(int8_t side, float angle, float angular_speed)
 	{
 	case DONE:
 		state = LEAN;
-		set_motor_speed(-side*LEAN_SPEED);
-		//reset_integrator = true;
+//		set_motor_speed(-side*LEAN_SPEED);
+		reset_integrator = true;
 		break;
 	case LEAN:
-		//balance_mode(angle-side*LEAN_ANGLE, 0);
-		if(fabs(angle) >= LEAN_ANGLE )
+		set_motor_speed(Kp*(angle-side*LEAN_ANGLE));
+		if(fabs(angle) >= LEAN_ANGLE && SIDE(angle) == side)
 		{
 			state = LET_FALL;
-			reset_integrator = true;
 			set_motor_speed(0);
 		}
 		break;
 	case LET_FALL:
-		if(fabs(angular_speed) >= FALL_SPEED )
+		if(fabs(angular_speed) >= FALL_SPEED  && SIDE(angle) == side)
+		{
+			state = ACCELERATE;
+			//set_motor_speed(side*MOVING_SPEED);
+		}
+		break;
+	case ACCELERATE:
+		reset_integrator = true;
+		if(fabs(acc_speed) >= fabs(regulator_speed(angle,angular_speed)))
 		{
 			state = MOVE;
-			//set_motor_speed(side*MOVING_SPEED);
+			reset_integrator = true;
+			acc_speed = 0;
+		}
+		else
+		{
+			acc_speed += side*MOVING_ACCELERATION;
+			set_motor_speed(acc_speed);
 		}
 		break;
 	case MOVE:
