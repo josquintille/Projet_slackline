@@ -111,7 +111,8 @@ int main(void)
 					break;
 			}
     	}
-
+    	//waits 0.05 second
+    	chThdSleepUntilWindowed(time, time + MS2ST(50));
     }
 }
 

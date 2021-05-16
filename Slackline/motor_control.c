@@ -169,7 +169,7 @@ static int regulator_speed(float angle, float angular_speed)
 		integ = 0;
 		reset_integrator = false;
 	}
-	//if(fabs(angle) > INTEG_THRESHOLD)
+	if(fabs(angle) > INTEG_THRESHOLD)
 		integ += Ki*angle;
 	// AWM
 	if(integ > AWM_MAX)
