@@ -197,13 +197,13 @@ static void following_mode(float angle, float angular_speed)
 		uint16_t distance = get_target_distance();
 		if(distance > MAX_TARGET_DISTANCE)
 		{
-			if(SIDE(angle) != BACK)
+			if(angle > -STABLE_ANGLE)
 				current_movement = FRONT;
 		}
 		else if (distance < MIN_TARGET_DISTANCE)
 		{
-			if(SIDE(angle) != FRONT)
-			current_movement = BACK;
+			if(angle < STABLE_ANGLE)
+				current_movement = BACK;
 		}
 	}
 
