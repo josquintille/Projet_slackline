@@ -97,7 +97,7 @@ static void update_data(float acceleration[], float current_speed)
 
 	// update angle
 	angle = angle_acc_f + angle_gyro_f;
-	chprintf((BaseSequentialStream *)&SD3, "%.4f, %.4f, %.4f;\n", angle_acc_f, angle_gyro_f, angle);
+	//chprintf((BaseSequentialStream *)&SD3, "%.4f, %.4f, %.4f;\n", angle_acc_f, angle_gyro_f, angle);
 
 
 	// apply moving average filter to current speed

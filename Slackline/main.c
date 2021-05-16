@@ -12,11 +12,16 @@
 #include <camera/po8030.h>
 #include <chprintf.h>
 #include <selector.h>
+#include <spi_comm.h>
+#include <leds.h>
 
 #include "motor_control.h"
 
 #define MODE_BALANCE 0
 #define MODE_OBSTACLE 1
+
+#define LED_ON	1
+#define LED_OFF	0
 
 
 static void serial_start(void)
@@ -31,6 +36,36 @@ static void serial_start(void)
 	sdStart(&SD3, &ser_cfg); // UART3.
 }
 
+void display_led(uint8_t mode)
+{
+	uint8_t body_value = 0, red_value = 0;
+
+	switch(mode)
+	{
+		case MODE_BALANCE:
+			body_value = LED_ON;
+			red_value = LED_OFF;
+			break;
+
+		case MODE_OBSTACLE:
+			body_value = LED_OFF;
+			red_value = LED_ON;
+			break;
+
+		default : // mode balance
+			body_value = LED_ON;
+			red_value = LED_OFF;
+			break;
+	}
+
+	set_body_led(body_value);
+	set_led(LED1, red_value);
+	set_led(LED3, red_value);
+	set_led(LED5, red_value);
+	set_led(LED7, red_value);
+	set_front_led(red_value);
+}
+
 int main(void)
 {
 
@@ -38,6 +73,8 @@ int main(void)
     chSysInit();
     mpu_init();
 
+    //start the spi communication (for rgb leds)
+    spi_comm_start();
     //starts the serial communication
     serial_start();
     //start the USB communication
@@ -57,6 +94,7 @@ int main(void)
     	if(current_mode != get_selector())
     	{
     		current_mode = get_selector();
+			display_led(current_mode);
 			switch(current_mode)
 			{
 				case MODE_BALANCE:
