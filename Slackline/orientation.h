@@ -10,6 +10,9 @@
 
 void orientation_start(void);
 
+/*
+ * get the position and speed of the e-puck
+ */
 float get_angle(void);
 float get_angular_speed(void);
 

@@ -12,35 +12,31 @@
 #include <motors.h>
 #include <math.h>
 
-			#include <ch.h>
-			#include <chprintf.h> //chprintf((BaseSequentialStream *)&SD3, "distance = %d\n",get_target_distance() );
-
 #define SIDE(x)  (signbit(x) ?  BACK : FRONT)
 
 // regulator parameters
 #define Ki 40
 #define Kp 2700
 #define Kd 1000
-#define AWM_MAX  1000
+#define AWM_MAX  1000/Ki
 #define AWM_MIN  -AWM_MAX
 #define INTEG_THRESHOLD 0.025
-#define DERIV_THRESHOLD 4*STABLE_SPEED
 #define MIN_SPEED 50
 
 #define STABLE_ANGLE 0.05 //[rad]
-#define STABLE_SPEED 0.05 //[rad/s]
+#define STABLE_SPEED 0.1
 
 // target moving parameters
 #define MIN_TARGET_DISTANCE 70 //[mm]
 #define MAX_TARGET_DISTANCE 130 // [mm]
-#define LEAN_SPEED 200
 #define LEAN_ANGLE 0.3f //[rad]
 #define FALL_SPEED .2//[rad/s]
-#define FALL_ANGLE .7//[rad]
-#define MOVING_ACCELERATION 100000*SLEEP_TIME/1000
-#define MOVING_SPEED 700
+#define MOVING_ACCELERATION 100000*THREAD_TIME/1000
 
-typedef enum moving_sequence_t {LEAN, LET_FALL, ACCELERATE, MOVE, DONE, NOT_DONE} moving_sequence_t;
+typedef enum moving_sequence_t
+{
+	LEAN, LET_FALL, ACCELERATE, MOVE, DONE, NOT_DONE
+} moving_sequence_t;
 
 // recovery parameters
 #define CRITICAL_ANGLE 		1//[rad]
@@ -48,28 +44,30 @@ typedef enum moving_sequence_t {LEAN, LET_FALL, ACCELERATE, MOVE, DONE, NOT_DONE
 #define WAIT_SPEED_MAX		100 //[ms]
 enum puck_side_t {BACK=-1,NONE = 0, FRONT=1};
 
-#define SLEEP_TIME 1 //[ms]
+#define THREAD_TIME 1 //[ms]
 
 static control_mode_t control_mode = BALANCE;
 static _Bool reset_move_sequence = false;
 static _Bool reset_integrator = false;
+
 /*
  *	set the both motor at the same speed
  */
 static void set_motor_speed(int speed);
+
 /*
  *  PID regulator
  *  input: 	difference between angle and goal angle
  *  		as well as the angular speed (in rad/s)
  */
 static int regulator_speed(float angle, float angular_speed);
-static _Bool is_stable(float angle, float angular_speed);
-static void balance_mode(float angle, float angular_speed);
 
+static void balance_mode(float angle, float angular_speed);
 static void following_mode(float angle, float angular_speed);
+
 /*
  * move the e-puck away or toward the target
- * in  : side Back or front, angle, angular speed of the e-pcuk
+ * in  : side BACK or FRONT, angle, angular speed of the e-puck
  * out : side if still moving, NONE if done
  */
 static int8_t move(int8_t side, float angle, float angular_speed);
@@ -92,8 +90,12 @@ static THD_FUNCTION(motor_control_thd, arg)
      float angle = 0;
      float angular_speed = 0;
 
-     while(1)
-     {	// get angle from IMU (orientation.h)
+     systime_t time;
+     while(true)
+     {
+    	 time = chVTGetSystemTime();
+
+    	 // get angle from IMU (orientation.h)
 		angle = get_angle();
 		angular_speed = get_angular_speed();
 
@@ -115,7 +117,7 @@ static THD_FUNCTION(motor_control_thd, arg)
 			recover();
 
 		// let other thread work
-		chThdSleepMilliseconds(SLEEP_TIME);
+		 chThdSleepUntilWindowed(time, time + MS2ST(THREAD_TIME));
      }
 }
 
@@ -170,26 +172,14 @@ static int regulator_speed(float angle, float angular_speed)
 		reset_integrator = false;
 	}
 	if(fabs(angle) > INTEG_THRESHOLD)
-		integ += Ki*angle;
+		integ += angle;
 	// AWM
 	if(integ > AWM_MAX)
 		integ = AWM_MAX;
 	else if (integ < AWM_MIN )
 		integ = AWM_MIN;
-	float deriv = 0;
-	//if(fabs(angular_speed) > DERIV_THRESHOLD)
-		deriv = Kd*(angular_speed);//-SIDE(angular_speed)*DERIV_THRESHOLD);
-	chprintf((BaseSequentialStream *)&SD3, "%.1f, %d, %.1f;\n",Kp*angle,integ, deriv);
-	return Kp*angle + integ + deriv;
-}
-
-
-static _Bool is_stable(float angle, float angular_speed)
-{
-	if(fabs(angle)<STABLE_ANGLE && fabs(angular_speed)<STABLE_SPEED)
-		return true;
-	else
-		return false;
+	// return PID
+	return Kp*angle + Ki*integ + Kd*angular_speed;
 }
 
 static void balance_mode(float angle, float angular_speed)
@@ -235,11 +225,11 @@ static int8_t move(int8_t side, float angle, float angular_speed)
 		state = DONE;
 		reset_move_sequence = false;
 	}
+
 	switch(state)
 	{
 	case DONE:
 		state = LEAN;
-//		set_motor_speed(-side*LEAN_SPEED);
 		reset_integrator = true;
 		break;
 	case LEAN:
@@ -254,7 +244,6 @@ static int8_t move(int8_t side, float angle, float angular_speed)
 		if(fabs(angular_speed) >= FALL_SPEED  && SIDE(angle) == side)
 		{
 			state = ACCELERATE;
-			//set_motor_speed(side*MOVING_SPEED);
 		}
 		break;
 	case ACCELERATE:
@@ -299,6 +288,7 @@ static void recover(void)
 {
 	set_motor_speed(0);
 	chThdSleepMilliseconds(WAIT_UNTILL_DOWN);
+	//set to minimum speed
 	set_motor_speed(-SIDE(get_angle())*MOTOR_SPEED_LIMIT);
 	chThdSleepMilliseconds(WAIT_SPEED_MAX);
 
@@ -306,7 +296,6 @@ static void recover(void)
 	_Bool fail_to_recover = false;
 
 	reset_integrator = true;
-
 
 	angle = get_angle();
 	angular_speed = get_angular_speed();
@@ -317,15 +306,15 @@ static void recover(void)
 		angular_speed = get_angular_speed();
 
 		// fail to recover : wait to be adjusted manually
-		if( SIDE(angle)==SIDE(angular_speed) && !(fabs(angular_speed) < STABLE_ANGLE) )
+		if( SIDE(angle)==SIDE(angular_speed) && !(fabs(angular_speed) < STABLE_SPEED) )
 		{
 			fail_to_recover = true;
 			set_motor_speed(0);
 		}
 		if(!fail_to_recover)
 			set_motor_speed(SIDE(angle)*MOTOR_SPEED_LIMIT);
-		chThdSleepMilliseconds(SLEEP_TIME);
+		chThdSleepMilliseconds(THREAD_TIME);
 	}
 	// Avoid overshoot
-	//reset_integrator = true;
+	reset_integrator = true;
 }

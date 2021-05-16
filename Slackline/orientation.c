@@ -7,14 +7,6 @@
  *  Created on: 17 avr. 2021
  *      Author: tille
  */
-#define DEBUGING
-#ifdef DEBUGING
-
-	#include <ch.h>
-	#include <chprintf.h>
-
-#endif
-
 #include <msgbus/messagebus.h>
 #include <sensors/imu.h>
 
@@ -32,20 +24,19 @@
 #define COMP_FILTER_FACTOR	0.99// exp(-CUTOFF_FREQ_FILTER*THREAD_PERIOD)
 #define SPEED_FILTER_FACTOR	0.96
 
-#define NB_SAMPLES_GYRO 50 //for the moving average filter
-#define BUFF_SIZE		NB_SAMPLES_GYRO-1
-
-
 #define THREAD_PERIOD	4 //[ms]
+
 // Bus to communicate with the IMU
 messagebus_t bus;
 MUTEX_DECL(bus_lock);
 CONDVAR_DECL(bus_condvar);
 
-
 static float angle = 0;
 static float angular_speed = 0;
 
+/*
+ * update angle and angular_speed from the imu data
+ */
 static void update_data(float acceleration[], float current_speed);
 
 static THD_WORKING_AREA(orientation_thd_wa, 512);
@@ -58,7 +49,7 @@ static THD_FUNCTION(orientation_thd, arg)
      imu_msg_t imu_values;
 
      systime_t time;
-     while(1)
+     while(true)
      {
     	 time = chVTGetSystemTime();
     	 messagebus_topic_wait(imu_topic, &imu_values, sizeof(imu_values));
@@ -98,24 +89,8 @@ static void update_data(float acceleration[], float current_speed)
 
 	// update angle
 	angle = angle_acc_f + angle_gyro_f;
-	//chprintf((BaseSequentialStream *)&SD3, "%.4f, %.4f, %.4f;\n", angle_acc_f, angle_gyro_f, angle);
 
-
-	// apply moving average filter to current speed
-	/*
-	static float buff_angular_speeds[BUFF_SIZE] = {0};
-	static uint8_t buff_head = 0;
-	// compute mean value
-	float mean_speed = current_speed;
-	for(uint8_t i = 0; i < BUFF_SIZE; i++)
-	{
-		mean_speed += buff_angular_speeds[i];
-	}
-	angular_speed = mean_speed / NB_SAMPLES_GYRO;
-	// update buffer
-	buff_angular_speeds[buff_head] = current_speed;
-	buff_head = (buff_head+1 >= BUFF_SIZE) ? 0 : buff_head+1;
-	*/
+	// filter angular speed
 	angular_speed = SPEED_FILTER_FACTOR*angular_speed + (1-SPEED_FILTER_FACTOR)*current_speed;
 }
 

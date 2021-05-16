@@ -1,18 +1,15 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-
+/*
+ * main.c
+ *
+ *  Created on: 15 avr. 2021
+ *      Author: tille
+ */
 #include <ch.h>
 #include <hal.h>
 #include <memory_protection.h>
-#include <usbcfg.h>
 #include <main.h>
 #include <motors.h>
-#include <camera/po8030.h>
-#include <chprintf.h>
 #include <selector.h>
-#include <spi_comm.h>
 #include <leds.h>
 
 #include "motor_control.h"
@@ -25,38 +22,26 @@
 #define LED_OFF	0
 
 
-static void serial_start(void)
-{
-	static SerialConfig ser_cfg = {
-	    115200,
-	    0,
-	    0,
-	    0,
-	};
-
-	sdStart(&SD3, &ser_cfg); // UART3.
-}
-
 void display_led(uint8_t mode)
 {
 	uint8_t body_value = 0, red_value = 0;
 
 	switch(mode)
 	{
-		case MODE_BALANCE:
-			body_value = LED_ON;
-			red_value = LED_OFF;
-			break;
+	case MODE_BALANCE:
+		body_value = LED_ON;
+		red_value = LED_OFF;
+		break;
 
-		case MODE_OBSTACLE:
-			body_value = LED_OFF;
-			red_value = LED_ON;
-			break;
+	case MODE_OBSTACLE:
+		body_value = LED_OFF;
+		red_value = LED_ON;
+		break;
 
-		default : // mode balance
-			body_value = LED_ON;
-			red_value = LED_OFF;
-			break;
+	default : // mode balance
+		body_value = LED_ON;
+		red_value = LED_OFF;
+		break;
 	}
 
 	set_body_led(body_value);
@@ -74,21 +59,12 @@ int main(void)
     chSysInit();
     mpu_init();
 
-    //start the spi communication (for RGB leds)
-    spi_comm_start();
-    //starts the serial communication
-    serial_start();
-    //start the USB communication
-    usb_start();
-	//inits the motors
-	motors_init();
-
 	//stars the threads for the pi regulator and the processing of the image
 	motor_control_start();
 
 	systime_t time;
     /* Infinite loop. */
-    while (1) {
+    while (true) {
     	time = chVTGetSystemTime();
     	static uint8_t current_mode = ILLEGAL_MODE;
 
@@ -98,17 +74,17 @@ int main(void)
 			display_led(current_mode);
 			switch(current_mode)
 			{
-				case MODE_OBSTACLE:
-					set_control_mode(FOLLOW_TARGET);
-					break;
+			case MODE_OBSTACLE:
+				set_control_mode(FOLLOW_TARGET);
+				break;
 
-				case MODE_BALANCE:
-					set_control_mode(BALANCE);
-					break;
+			case MODE_BALANCE:
+				set_control_mode(BALANCE);
+				break;
 
-				default : // mode balance
-					set_control_mode(BALANCE);
-					break;
+			default : // mode balance
+				set_control_mode(BALANCE);
+				break;
 			}
     	}
     	//waits 0.05 second
