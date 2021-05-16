@@ -20,7 +20,7 @@
 // regulator parameters
 #define Ki 40
 #define Kp 2700
-#define Kd 100
+#define Kd 1000
 #define AWM_MAX  1000
 #define AWM_MIN  -AWM_MAX
 #define INTEG_THRESHOLD STABLE_ANGLE
@@ -161,7 +161,7 @@ static void set_motor_speed(int speed)
 static int regulator_speed(float angle, float angular_speed)
 {	// pid regulator
 	// integrator
-	static int integ = 0;
+	static float integ = 0;
 	if(reset_integrator)
 	{
 		integ = 0;

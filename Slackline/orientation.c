@@ -31,7 +31,7 @@
 #define CUTOFF_FREQ_FILTER	2.5133// [rad/s]
 #define FILTER_FACTOR	0.99// exp(-OMEGA_N*THREAD_PERIOD)
 
-#define NB_SAMPLES_GYRO 10 //for the moving average filter
+#define NB_SAMPLES_GYRO 50 //for the moving average filter
 #define BUFF_SIZE		NB_SAMPLES_GYRO-1
 
 
