@@ -17,7 +17,7 @@
 // regulator parameters
 #define Ki 40
 #define Kp 2700
-#define Kd 1000
+#define Kd 100
 #define AWM_MAX  1000/Ki
 #define AWM_MIN  -AWM_MAX
 #define INTEG_THRESHOLD 0.025
@@ -42,7 +42,10 @@ typedef enum moving_sequence_t
 #define CRITICAL_ANGLE 		1//[rad]
 #define WAIT_UNTILL_DOWN 	1000 //[ms]
 #define WAIT_SPEED_MAX		100 //[ms]
-enum puck_side_t {BACK=-1,NONE = 0, FRONT=1};
+enum puck_side_t
+{
+	BACK = -1, NONE = 0, FRONT = 1
+};
 
 #define THREAD_TIME 1 //[ms]
 
@@ -165,7 +168,7 @@ static int regulator_speed(float angle, float angular_speed)
 {
 	// pid regulator
 	// integrator
-	static float integ = 0;
+	static int integ = 0;
 	if(reset_integrator)
 	{
 		integ = 0;

@@ -91,7 +91,7 @@ static void update_data(float acceleration[], float current_speed)
 	angle = angle_acc_f + angle_gyro_f;
 
 	// filter angular speed
-	angular_speed = SPEED_FILTER_FACTOR*angular_speed + (1-SPEED_FILTER_FACTOR)*current_speed;
+	angular_speed = current_speed;//SPEED_FILTER_FACTOR*angular_speed + (1-SPEED_FILTER_FACTOR)*current_speed;
 }
 
 

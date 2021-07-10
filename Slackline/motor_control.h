@@ -8,7 +8,10 @@
 #ifndef MOTOR_CONTROL_H_
 #define MOTOR_CONTROL_H_
 
-typedef enum control_mode_t {BALANCE, FOLLOW_TARGET} control_mode_t;
+typedef enum control_mode_t
+{
+	BALANCE, FOLLOW_TARGET
+} control_mode_t;
 /*
  * initialize the thread
  */
